@@ -9,10 +9,10 @@ on:
       - "main"
 
 env:
-  HCP_ORGANIZATION_ID: ${{ secrets.HCP_ORGANIZATION_ID }}
-  HCP_PROJECT_ID: ${{ secrets.HCP_PROJECT_ID }}
   HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
   HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
+  HCP_PROJECT_ID: ${{ secrets.HCP_PROJECT_ID }}
+  HCP_ORGANIZATION_ID: ${{ secrets.HCP_ORGANIZATION_ID }}
   HCP_BUCKET_NAME: "learn-packer-github-actions"
 
 jobs:
@@ -23,25 +23,25 @@ jobs:
       iteration_id: ${{ steps.hcp.outputs.iteration_id }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
+          aws-region: us-west-1
 
       - name: Packer Init
         run: packer init .
 
-      - name: Packer Build Tags
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: HCP_PACKER_BUILD_FINGERPRINT=$(date +'%m%d%YT%H%M%S') packer build .
-
       - name: Packer Build - Branches
         if: "!startsWith(github.ref, 'refs/tags/v')"
         run: packer build .
+
+      - name: Packer Build - Tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: HCP_PACKER_BUILD_FINGERPRINT=$(date +'%m%d%YT%H%M%S') packer build .
 
       - name: Get HCP Packer Iteration ID from Packer Manifest
         id: hcp
@@ -50,14 +50,13 @@ jobs:
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           iteration_id=$(echo "$build" | jq -r '.custom_data.iteration_id')
           echo "::set-output name=iteration_id::$iteration_id"
-
   update-hcp-packer-channel:
     name: Update HCP Packer channel
     needs: ["build-image"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Create and set channel
         working-directory: .github/scripts
