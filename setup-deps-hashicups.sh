@@ -17,8 +17,10 @@ git clone https://github.com/hashicorp-demoapp/hashicups-setups
 cd hashicups-setups/docker-compose-deployment
 git checkout server
 
-sed -i 's/HashiCups/HashiCups - Development/g' docker-compose.yaml
-# Use `compose create` to fetch container data without running the container
+HASHICUPS_VERSION="Development"
+sed -i 's/HashiCups/HashiCups - ${HASHICUPS_VERSION}/g' docker-compose.yaml
+
+# Use `compose create` to fetch container data without starting the container
 sudo docker compose create
 
 # Configure HashiCups to start on boot using systemd
