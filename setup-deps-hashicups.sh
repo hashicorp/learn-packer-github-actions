@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eu -o pipefail
 
 # Install necessary dependencies
 sudo apt-get update
