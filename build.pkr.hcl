@@ -1,9 +1,9 @@
-source "amazon-ebs" "ubuntu-hirsute" {
+source "amazon-ebs" "ubuntu-lts" {
   region = "us-west-1"
   source_ami_filter {
     filters = {
       virtualization-type = "hvm"
-      name                = "ubuntu/images/*ubuntu-hirsute-21.04-amd64-server-*"
+      name                = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
       root-device-type    = "ebs"
     }
     owners      = ["099720109477"]
@@ -31,21 +31,20 @@ This is an image for HashiCups.
   }
 
   sources = [
-    "source.amazon-ebs.ubuntu-hirsute",
+    "source.amazon-ebs.ubuntu-lts",
   ]
 
   ## HashiCups
-  # Add startup script that will run hashicups on instance boot
+  # systemd unit for hashicups service
   provisioner "file" {
-    source      = "setup-deps-hashicups.sh"
-    destination = "/tmp/setup-deps-hashicups.sh"
+    source      = "hashicups.service"
+    destination = "/tmp/hashicups.service"
   }
 
-  # Move temp files to actual destination
-  # Must use this method because their destinations are protected 
+  # Set up hashicups
   provisioner "shell" {
-    inline = [
-      "sudo cp /tmp/setup-deps-hashicups.sh /var/lib/cloud/scripts/per-boot/setup-deps-hashicups.sh",
+    scripts = [
+      "setup-deps-hashicups.sh"
     ]
   }
 
