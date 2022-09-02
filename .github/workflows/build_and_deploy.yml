@@ -36,7 +36,7 @@ jobs:
         run: packer init .
 
       - name: Packer Build - Branches
-        if: "!startsWith(github.ref, 'refs/tags/v')"
+        if: "startsWith(github.ref, 'refs/heads/')"
         run: packer build .
 
       - name: Packer Build - Tags
