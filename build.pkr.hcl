@@ -34,14 +34,13 @@ This is an image for HashiCups.
     "source.amazon-ebs.ubuntu-lts",
   ]
 
-  ## HashiCups
-  # systemd unit for hashicups service
+  # systemd unit for HashiCups service
   provisioner "file" {
     source      = "hashicups.service"
     destination = "/tmp/hashicups.service"
   }
 
-  # Set up hashicups
+  # Set up HashiCups
   provisioner "shell" {
     scripts = [
       "setup-deps-hashicups.sh"
