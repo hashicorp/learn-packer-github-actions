@@ -50,7 +50,6 @@ jobs:
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           iteration_id=$(echo "$build" | jq -r '.custom_data.iteration_id')
           echo "::set-output name=iteration_id::$iteration_id"
-  
   upload-ali:
     name: Build and upload to alicloud
     runs-on: macOS-10.15
@@ -152,7 +151,7 @@ jobs:
           kubectl rollout status deployment/$ACK_DEPLOYMENT_NAME
           kubectl get services -o wide
           - name: Alibaba Cloud Container Registry (ACR) Image Scan
-  
+          
   update-hcp-packer-channel:
     name: Update HCP Packer channel
     needs: ["build-image"]
