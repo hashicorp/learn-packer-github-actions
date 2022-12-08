@@ -3,10 +3,9 @@ name: Build and Deploy
 on:
   push:
     tags: ["v[0-9].[0-9]+.[0-9]+"]
-    branches:
-      - "development"
-      - "staging"
-      - "main"
+    branches: [develop, staging, master]
+  pull_request: 
+    branches: [develop, staging, master]
 
 env:
   HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
@@ -16,6 +15,36 @@ env:
   HCP_BUCKET_NAME: "learn-packer-github-actions"
 
 jobs:
+
+  Validate-Packer:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Validate-Packer
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Validate Template
+        uses: jveraduran/packer-github-actions@master
+        with:
+          command: validate
+          arguments: -syntax-only
+          target: build.pkr.hcl
+  
+  Format-Packer:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: Format-Packer
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Validate Template
+        uses: hashicorp/packer-github-actions@master
+        with:
+          command: fmt
+          target: build.pkr.hcl
+
   build-image:
     name: Build
     runs-on: ubuntu-latest
@@ -30,7 +59,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-1
+          aws-region: us-east-1
 
       - name: Packer Init
         run: packer init .
@@ -50,6 +79,7 @@ jobs:
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           iteration_id=$(echo "$build" | jq -r '.custom_data.iteration_id')
           echo "::set-output name=iteration_id::$iteration_id"
+          
   upload-ali:
     name: Build and upload to alicloud
     runs-on: macOS-10.15
