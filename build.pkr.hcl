@@ -60,7 +60,7 @@ This is an image for HashiCups.
     output     = "packer_manifest.json"
     strip_path = true
     custom_data = {
-      iteration_id = packer.iterationID
+      version_fingerprint = packer.versionFingerprint
     }
   }
 }
