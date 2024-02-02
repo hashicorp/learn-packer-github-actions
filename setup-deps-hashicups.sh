@@ -17,7 +17,7 @@ git clone https://github.com/hashicorp-demoapp/hashicups-setups
 cd hashicups-setups/docker-compose-deployment
 git checkout server
 
-HASHICUPS_VERSION="Development"
+HASHICUPS_VERSION="v1.0.0"
 sed -i 's/HashiCups/HashiCups - ${HASHICUPS_VERSION}/g' docker-compose.yaml
 
 # Use `compose create` to fetch container data without starting the container
