@@ -8,7 +8,7 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu-lts" {
-  region = "us-west-1"
+  region = "il-central-1"
   source_ami_filter {
     filters = {
       virtualization-type = "hvm"
@@ -18,12 +18,12 @@ source "amazon-ebs" "ubuntu-lts" {
     owners      = ["099720109477"]
     most_recent = true
   }
-  instance_type  = "t2.small"
+  instance_type  = "t3.micro"
   ssh_username   = "ubuntu"
   ssh_agent_auth = false
 
   ami_name    = "hashicups_{{timestamp}}"
-  ami_regions = ["us-west-1"]
+  ami_regions = ["il-central-1"]
 }
 
 build {
