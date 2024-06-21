@@ -12,14 +12,14 @@ source "amazon-ebs" "ubuntu-lts" {
   source_ami_filter {
     filters = {
       virtualization-type = "hvm"
-      name                = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
+      name                = "al2023-ami-2023.4.20240528.0-kernel-6.1-x86_64"
       root-device-type    = "ebs"
     }
-    owners      = ["099720109477"]
+    owners      = ["659248058490"]
     most_recent = true
   }
   instance_type  = "t3.micro"
-  ssh_username   = "ubuntu"
+  ssh_username   = "ec2-user"
   ssh_agent_auth = false
 
   ami_name    = "hashicups_{{timestamp}}"
