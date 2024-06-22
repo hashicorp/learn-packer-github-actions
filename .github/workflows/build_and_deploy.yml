@@ -14,6 +14,8 @@ env:
   HCP_PROJECT_ID: ${{ secrets.HCP_PROJECT_ID }}
   HCP_ORGANIZATION_ID: ${{ secrets.HCP_ORGANIZATION_ID }}
   HCP_BUCKET_NAME: "learn-packer-github-actions"
+  SSH_PACKER: ${{ secrets.SSH_PACKER }}
+  SSH_PACKER_PUB: ${{ secrets.SSH_PACKER_PUB }}
 
 jobs:
   build-artifact:
