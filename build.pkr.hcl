@@ -42,14 +42,15 @@ This is an image for HashiCups.
   ]
 
 
-provisioner "file" {
-  source      = "C:\\Users\\USER\\.ssh\\PACKER"
-  destination = "/home/ec2-user/.ssh/id_ed25519"
-}
-provisioner "file" {
-  source      = "C:\\Users\\USER\\.ssh\\PACKER.pub"
-  destination = "/home/ec2-user/.ssh/id_ed25519.pub"
-}
+ # Copy SSH keys to the EC2 instance
+  provisioner "file" {
+    source      = "C:\\Users\\USER\\.ssh\\PACKER"
+    destination = "/home/ec2-user/.ssh/id_ed25519"
+  }
+  provisioner "file" {
+    source      = "C:\\Users\\USER\\.ssh\\PACKER.pub"
+    destination = "/home/ec2-user/.ssh/id_ed25519.pub"
+  }
 
   # Set appropriate permissions for the private key
   provisioner "shell" {
