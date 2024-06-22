@@ -25,7 +25,7 @@ echo "Installing PM2 globally..."
 sudo npm install -g pm2
 
 # Define variables
-GITHUB_USER="HeshbonaitP"
+GITHUB_USER="dvirmoyal"
 GITHUB_REPO="Frontend"
 GITHUB_BRANCH="develop"
 GITHUB_PAT="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"
@@ -33,7 +33,7 @@ APP_DIR="/home/ec2-user/app"
 
 # Clone the specific branch from GitHub
 echo "Cloning the repository..."
-git clone -b ${GITHUB_BRANCH} https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
+git clone -b ${GITHUB_BRANCH} git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
 
 # Change directory to the app
 cd ${APP_DIR}
