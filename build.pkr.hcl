@@ -8,11 +8,15 @@ packer {
 }
 
 variable "SSH_PACKER" {
-  type = string
+  type        = string
+  description = "SSH private key content"
+  default     = ""
 }
 
 variable "SSH_PACKER_PUB" {
-  type = string
+  type        = string
+  description = "SSH public key content"
+  default     = ""
 }
 
 source "amazon-ebs" "ubuntu-lts" {
