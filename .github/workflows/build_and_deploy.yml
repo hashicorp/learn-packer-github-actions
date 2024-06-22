@@ -1,5 +1,4 @@
 name: Build and Deploy
-
 on:
   push:
     tags: ["v[0-9].[0-9]+.[0-9]+"]
@@ -7,7 +6,6 @@ on:
       - "development"
       - "staging"
       - "main"
-
 env:
   HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
   HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
@@ -16,7 +14,6 @@ env:
   HCP_BUCKET_NAME: "learn-packer-github-actions"
   SSH_PACKER: ${{ secrets.SSH_PACKER }}
   SSH_PACKER_PUB: ${{ secrets.SSH_PACKER_PUB }}
-
 jobs:
   build-artifact:
     name: Build
@@ -26,26 +23,28 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8c3f20df09ac63af7b3ae3d7c91f105f857d8497 # v4.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1 
-
       - name: Packer Init
         run: packer init .
-
       - name: Packer Build - Branches
         if: startsWith(github.ref, 'refs/heads/')
-        run: packer build .
-
+        run: |
+          packer build \
+            -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
+            -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
+            .
       - name: Packer Build - Tags
         if: startsWith(github.ref, 'refs/tags/v')
-        run: HCP_PACKER_BUILD_FINGERPRINT=$(date +'%m%d%YT%H%M%S') packer build .
-
-
+        run: |
+          HCP_PACKER_BUILD_FINGERPRINT=$(date +'%m%d%YT%H%M%S') packer build \
+            -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
+            -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
+            .
       - name: Get HCP Packer version fingerprint from Packer Manifest
         id: hcp
         run: |
@@ -60,7 +59,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
-
       - name: Create and set channel
         working-directory: .github/scripts
         run: |
