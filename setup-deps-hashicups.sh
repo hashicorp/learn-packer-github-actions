@@ -28,13 +28,34 @@ sudo npm install -g pm2
 GITHUB_USER="dvirmoyal"
 GITHUB_REPO="Frontend"
 GITHUB_BRANCH="develop"
-GITHUB_PAT="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"
 APP_DIR="/home/ec2-user/app"
+
+# Ensure SSH agent is running and add the key
+eval $(ssh-agent -s)
+ssh-add /home/ec2-user/.ssh/id_ed25519
+
+# Set up SSH config to use the correct key for GitHub
+mkdir -p ~/.ssh
+echo "Host github.com
+    IdentityFile /home/ec2-user/.ssh/id_ed25519
+    IdentitiesOnly yes" > ~/.ssh/config
+
+# Ensure correct permissions on SSH files
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/config
+chmod 600 /home/ec2-user/.ssh/id_ed25519
 
 # Clone the specific branch from GitHub
 echo "Cloning the repository..."
-git clone -b ${GITHUB_BRANCH} git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
+GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git clone -b ${GITHUB_BRANCH} git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
 
+# Check if clone was successful
+if [ $? -eq 0 ]; then
+    echo "Repository cloned successfully."
+else
+    echo "Failed to clone repository. Please check your SSH key and GitHub access."
+    exit 1
+fi
 # Change directory to the app
 cd ${APP_DIR}
 

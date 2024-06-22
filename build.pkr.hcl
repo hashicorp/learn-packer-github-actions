@@ -21,8 +21,8 @@ source "amazon-ebs" "ubuntu-lts" {
   instance_type  = "t3.micro"
   ssh_username   = "ec2-user"
   ssh_agent_auth = false
-  ami_name    = "hashicups_{{timestamp}}"
-  ami_regions = ["il-central-1"]
+  ami_name       = "hashicups_{{timestamp}}"
+  ami_regions    = ["il-central-1"]
 }
 
 build {
@@ -41,21 +41,17 @@ This is an image for HashiCups.
     "source.amazon-ebs.ubuntu-lts",
   ]
 
-
- # Copy SSH keys to the EC2 instance
-  provisioner "file" {
-    source      = "C:\\Users\\USER\\.ssh\\PACKER"
-    destination = "/home/ec2-user/.ssh/id_ed25519"
-  }
-  provisioner "file" {
-    source      = "C:\\Users\\USER\\.ssh\\PACKER.pub"
-    destination = "/home/ec2-user/.ssh/id_ed25519.pub"
-  }
-
-  # Set appropriate permissions for the private key
+  # Write SSH keys from GitHub secrets
   provisioner "shell" {
     inline = [
-      "chmod 600 /home/ec2-user/.ssh/id_ed25519"
+      "echo '${env("SSH_PACKER")}' > /tmp/id_ed25519",
+      "echo '${env("SSH_PACKER_PUB")}' > /tmp/id_ed25519.pub",
+      "chmod 600 /tmp/id_ed25519",
+      "chmod 644 /tmp/id_ed25519.pub",
+      "mkdir -p /home/ec2-user/.ssh",
+      "mv /tmp/id_ed25519 /home/ec2-user/.ssh/",
+      "mv /tmp/id_ed25519.pub /home/ec2-user/.ssh/",
+      "chown ec2-user:ec2-user /home/ec2-user/.ssh/id_ed25519*"
     ]
   }
 
