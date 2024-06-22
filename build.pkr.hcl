@@ -41,13 +41,13 @@ This is an image for HashiCups.
     "source.amazon-ebs.ubuntu-lts",
   ]
 
-# Copy SSH keys to the EC2 instance
+
 provisioner "file" {
-  source      = "C:/Users/USER/.ssh/PACKER"
+  source      = "C:\\Users\\USER\\.ssh\\PACKER"
   destination = "/home/ec2-user/.ssh/id_ed25519"
 }
 provisioner "file" {
-  source      = "C:/Users/USER/.ssh/PACKER.pub"
+  source      = "C:\\Users\\USER\\.ssh\\PACKER.pub"
   destination = "/home/ec2-user/.ssh/id_ed25519.pub"
 }
 
