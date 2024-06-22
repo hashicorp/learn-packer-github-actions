@@ -1,9 +1,7 @@
 #!/bin/bash
 
-sleep 30 
-
+sleep 30
 set -e
-
 echo "Starting installation script..."
 
 # Update and upgrade system packages
@@ -13,7 +11,6 @@ sudo yum update -y
 # Install required packages
 echo "Installing required packages..."
 sudo yum install -y git wget ruby
-
 
 # Install Node.js and npm
 echo "Installing Node.js and npm..."
@@ -38,7 +35,8 @@ ssh-add /home/ec2-user/.ssh/id_ed25519
 mkdir -p ~/.ssh
 echo "Host github.com
     IdentityFile /home/ec2-user/.ssh/id_ed25519
-    IdentitiesOnly yes" > ~/.ssh/config
+    IdentitiesOnly yes
+    StrictHostKeyChecking no" > ~/.ssh/config
 
 # Ensure correct permissions on SSH files
 chmod 700 ~/.ssh
@@ -47,7 +45,7 @@ chmod 600 /home/ec2-user/.ssh/id_ed25519
 
 # Clone the specific branch from GitHub
 echo "Cloning the repository..."
-GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git clone -b ${GITHUB_BRANCH} git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
+git clone -b ${GITHUB_BRANCH} git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
 
 # Check if clone was successful
 if [ $? -eq 0 ]; then
@@ -56,6 +54,7 @@ else
     echo "Failed to clone repository. Please check your SSH key and GitHub access."
     exit 1
 fi
+
 # Change directory to the app
 cd ${APP_DIR}
 
@@ -67,13 +66,16 @@ npm install
 echo "Building the app..."
 npm run build
 
-# Start the app with PM2
-echo "Starting the app with PM2..."
+# Create a startup script
+cat << EOF > /home/ec2-user/start_app.sh
+#!/bin/bash
+cd ${APP_DIR}
 pm2 start npm --name "heshbonaitplus" -- start
+EOF
 
-# Save running processes and set up PM2 to start on boot
-echo "Saving running processes and setting up PM2 to start on boot..."
-pm2 save
-sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u ec2-user --hp /home/ec2-user
+chmod +x /home/ec2-user/start_app.sh
+
+# Add the startup script to crontab
+echo "@reboot ec2-user /home/ec2-user/start_app.sh" | sudo tee -a /etc/crontab
 
 echo "Installation script completed."

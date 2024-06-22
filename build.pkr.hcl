@@ -7,6 +7,14 @@ packer {
   }
 }
 
+variable "SSH_PACKER" {
+  type = string
+}
+
+variable "SSH_PACKER_PUB" {
+  type = string
+}
+
 source "amazon-ebs" "ubuntu-lts" {
   region = "il-central-1"
   source_ami_filter {
@@ -26,7 +34,6 @@ source "amazon-ebs" "ubuntu-lts" {
 }
 
 build {
-  # HCP Packer settings
   hcp_packer_registry {
     bucket_name = "learn-packer-github-actions"
     description = <<EOT
@@ -36,16 +43,19 @@ This is an image for HashiCups.
       "hashicorp-learn" = "learn-packer-github-actions",
     }
   }
-
+  
   sources = [
     "source.amazon-ebs.ubuntu-lts",
   ]
-
-  # Write SSH keys from GitHub secrets
+  
   provisioner "shell" {
+    environment_vars = [
+      "SSH_PACKER=${var.SSH_PACKER}",
+      "SSH_PACKER_PUB=${var.SSH_PACKER_PUB}"
+    ]
     inline = [
-      "echo '${env("SSH_PACKER")}' > /tmp/id_ed25519",
-      "echo '${env("SSH_PACKER_PUB")}' > /tmp/id_ed25519.pub",
+      "echo \"$SSH_PACKER\" > /tmp/id_ed25519",
+      "echo \"$SSH_PACKER_PUB\" > /tmp/id_ed25519.pub",
       "chmod 600 /tmp/id_ed25519",
       "chmod 644 /tmp/id_ed25519.pub",
       "mkdir -p /home/ec2-user/.ssh",
@@ -54,20 +64,16 @@ This is an image for HashiCups.
       "chown ec2-user:ec2-user /home/ec2-user/.ssh/id_ed25519*"
     ]
   }
-
-  # systemd unit for HashiCups service
+  
   provisioner "file" {
     source      = "hashicups.service"
     destination = "/tmp/hashicups.service"
   }
-
-  # Set up HashiCups
+  
   provisioner "shell" {
-    scripts = [
-      "setup-deps-hashicups.sh"
-    ]
+    script = "setup-deps-hashicups.sh"
   }
-
+  
   post-processor "manifest" {
     output     = "packer_manifest.json"
     strip_path = true
