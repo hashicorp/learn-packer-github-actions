@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version_fingerprint: ${{ steps.hcp.outputs.version_fingerprint }}
+      ami_id: ${{ steps.ami.outputs.ami_id }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
@@ -51,7 +52,15 @@ jobs:
           last_run_uuid=$(jq -r '.last_run_uuid' "./packer_manifest.json")
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           version_fingerprint=$(echo "$build" | jq -r '.custom_data.version_fingerprint')
-          echo "::set-output name=version_fingerprint::$version_fingerprint"
+          echo "version_fingerprint=$version_fingerprint" >> $GITHUB_OUTPUT
+      - name: Get AMI ID from Packer Manifest
+        id: ami
+        run: |
+          last_run_uuid=$(jq -r '.last_run_uuid' "./packer_manifest.json")
+          build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
+          ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
+          echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
+
   update-hcp-packer-channel:
     name: Update HCP Packer channel
     needs: ["build-artifact"]
@@ -64,3 +73,62 @@ jobs:
         run: |
           channel_name=$( echo ${{github.ref_name}} | sed 's/\./-/g')
           ./create_channel_version.sh $HCP_BUCKET_NAME $channel_name "${{ needs.build-artifact.outputs.version_fingerprint }}"
+
+  update-asg:
+    name: Update Frontend Auto Scaling Group
+    needs: ["build-artifact"]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@8c3f20df09ac63af7b3ae3d7c91f105f857d8497 # v4.0.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: il-central-1
+      - name: Update Frontend ASG with new AMI
+        env:
+          FRONTEND_ASG_NAME: scaling-group-dev-frontend
+          LAUNCH_TEMPLATE_NAME: templete-for-heshbonaitplus-fontend
+        run: |
+          # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש
+          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
+            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+            --source-version '$Latest' \
+            --launch-template-data '{
+              "ImageId":"${{ needs.build-artifact.outputs.ami_id }}"
+            }' \
+            --query 'LaunchTemplateVersion.VersionNumber' \
+            --output text)
+
+          # עדכון ה-Frontend Auto Scaling Group
+          aws autoscaling update-auto-scaling-group \
+            --auto-scaling-group-name $FRONTEND_ASG_NAME \
+            --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version=$NEW_LAUNCH_TEMPLATE_VERSION
+
+          # התחלת רענון המופעים
+          aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name $FRONTEND_ASG_NAME
+
+          echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: ${{ needs.build-artifact.outputs.ami_id }}"
+
+      - name: Verify Instances Health
+        env:
+          FRONTEND_ASG_NAME: scaling-group-dev-frontend
+        run: |
+          # המתנה לסיום רענון המופעים
+          aws autoscaling wait instance-refresh-in-progress \
+            --auto-scaling-group-name $FRONTEND_ASG_NAME
+
+          # בדיקת סטטוס המופעים
+          UNHEALTHY_INSTANCES=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names $FRONTEND_ASG_NAME \
+            --query 'AutoScalingGroups[].Instances[?HealthStatus!=`Healthy`]' \
+            --output text)
+
+          if [ -z "$UNHEALTHY_INSTANCES" ]; then
+            echo "כל המופעים ב-$FRONTEND_ASG_NAME בריאים!"
+          else
+            echo "נמצאו מופעים לא בריאים ב-$FRONTEND_ASG_NAME:"
+            echo "$UNHEALTHY_INSTANCES"
+            exit 1
+          fi
