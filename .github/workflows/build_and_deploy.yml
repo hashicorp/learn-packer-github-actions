@@ -113,7 +113,6 @@ jobs:
             exit 1
           fi
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
-
       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
@@ -125,10 +124,12 @@ jobs:
             echo "Error: Invalid AMI ID: '$AMI_ID'"
             exit 1
           fi
+          
           ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --query 'InstanceRefreshes[?Status==`InProgress`].InstanceRefreshId' \
             --output text)
+          
           if [ -n "$ACTIVE_REFRESH" ]; then
             echo "רענון מופעל פעיל כבר קיים. ממתין לסיום..."
             aws autoscaling wait instance-refresh-in-progress \
@@ -149,31 +150,33 @@ jobs:
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
           
-          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-            --source-version '$Latest' \
-            --launch-template-data '{
-              "ImageId":"'"$AMI_ID"'",
-              "UserData":"'"$(echo -n '#!/bin/bash
+          USER_DATA=$(cat << EOF | base64 -w 0
+#!/bin/bash
 set -e
 echo "Starting application..."
 cd /home/ec2-user/app
 pm2 start npm --name "heshbonaitplus" -- start
-echo "Application started successfully."' | base64 -w 0)"'"
-            }' \
+echo "Application started successfully."
+EOF
+)
+          
+          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
+            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+            --source-version '$Latest' \
+            --launch-template-data "{\"ImageId\":\"$AMI_ID\",\"UserData\":\"$USER_DATA\"}" \
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
           
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version=$NEW_LAUNCH_TEMPLATE_VERSION
-
+          
           aws autoscaling start-instance-refresh \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --preferences '{"MinHealthyPercentage": 100}'
-
+          
           echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: $AMI_ID"
-
+          
           echo "ממתין לסיום רענון המופעים..."
           while true; do
             REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
@@ -195,31 +198,31 @@ echo "Application started successfully."' | base64 -w 0)"'"
               sleep 30
             fi
           done
-
+          
           TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names $FRONTEND_ASG_NAME \
             --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
             --output text)
-
+          
           echo "ממתין 60 שניות לפני בדיקת בריאות ה-ALB..."
           sleep 60
-
+          
           TARGET_HEALTH=$(aws elbv2 describe-target-health \
             --target-group-arn $TARGET_GROUP_ARN \
             --query 'TargetHealthDescriptions[0].TargetHealth.State' \
             --output text)
-
+          
           if [ "$TARGET_HEALTH" != "healthy" ]; then
             echo "המכונה החדשה לא בריאה ב-ALB. בודק את הלוגים ואת הגדרות האפליקציה."
             exit 1
           fi
-
+          
           echo "המכונה החדשה בריאה ב-ALB."
-
+          
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --min-size $CURRENT_MIN \
             --max-size $CURRENT_MAX \
             --desired-capacity $CURRENT_DESIRED
-
+          
           echo "update works!!"
