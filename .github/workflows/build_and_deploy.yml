@@ -150,7 +150,7 @@ jobs:
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
           
-          USER_DATA=$(cat << EOF | base64 -w 0
+           USER_DATA=$(cat << 'EOF' | base64 -w 0
 #!/bin/bash
 set -e
 echo "Starting application..."
