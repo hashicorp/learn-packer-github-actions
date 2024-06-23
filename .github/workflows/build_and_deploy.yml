@@ -117,7 +117,7 @@ jobs:
           fi
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
 
-      - name: Update and Refresh ASG
+       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
           LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
@@ -152,20 +152,24 @@ jobs:
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
           
+         - name: Update and Refresh ASG
+        env:
+          FRONTEND_ASG_NAME: scaling-group-dev-frontend
+          LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
+        run: |
+          # ... (החלק הקודם נשאר ללא שינוי)
+          
           NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
             --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
             --source-version '$Latest' \
             --launch-template-data '{
               "ImageId":"'"$AMI_ID"'",
-              "UserData":"'"$(cat <<'EOF' | base64 -w 0
-#!/bin/bash
+              "UserData":"'"$(echo '#!/bin/bash
 set -e
 echo "Starting application..."
 cd /home/ec2-user/app
 pm2 start npm --name "heshbonaitplus" -- start
-echo "Application started successfully."
-EOF
-          )"'"
+echo "Application started successfully."' | base64 -w 0)"'"
             }' \
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
