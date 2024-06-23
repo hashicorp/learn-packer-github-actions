@@ -6,6 +6,18 @@ on:
       - "development"
       - "staging"
       - "main"
+  workflow_dispatch:
+    inputs:
+      run_update_asg_only:
+        description: 'Run only the update ASG process'
+        required: true
+        default: 'false'
+        type: boolean
+      manual_ami_id:
+        description: 'Manually specify AMI ID (leave empty to use default)'
+        required: false
+        type: string
+
 env:
   HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
   HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
@@ -14,6 +26,9 @@ env:
   HCP_BUCKET_NAME: "learn-packer-github-actions"
   SSH_PACKER: ${{ secrets.SSH_PACKER }}
   SSH_PACKER_PUB: ${{ secrets.SSH_PACKER_PUB }}
+  DEFAULT_AMI_NAME: "al2023-ami-2023.4.20240528.0-kernel-6.1-x86_64"
+  DEFAULT_AMI_OWNER: "659248058490"
+
 jobs:
   build-artifact:
     name: Build
@@ -21,6 +36,7 @@ jobs:
     outputs:
       version_fingerprint: ${{ steps.hcp.outputs.version_fingerprint }}
       ami_id: ${{ steps.ami.outputs.ami_id }}
+    if: github.event.inputs.run_update_asg_only != 'true'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
@@ -60,11 +76,13 @@ jobs:
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
+          echo "AMI ID from Packer build: $ami_id"
 
   update-hcp-packer-channel:
     name: Update HCP Packer channel
     needs: ["build-artifact"]
     runs-on: ubuntu-latest
+    if: github.event.inputs.run_update_asg_only != 'true'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
@@ -77,6 +95,7 @@ jobs:
   update-asg:
     name: Update Frontend Auto Scaling Group
     needs: ["build-artifact"]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
@@ -85,17 +104,42 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
+      
+      - name: Determine AMI ID
+        id: get_ami
+        run: |
+          if [ -n "${{ github.event.inputs.manual_ami_id }}" ]; then
+            echo "Using manually specified AMI ID"
+            AMI_ID="${{ github.event.inputs.manual_ami_id }}"
+          elif [ "${{ github.event.inputs.run_update_asg_only }}" == "true" ]; then
+            echo "Using default AMI"
+            AMI_ID=$(aws ec2 describe-images \
+              --owners ${{ env.DEFAULT_AMI_OWNER }} \
+              --filters "Name=name,Values=${{ env.DEFAULT_AMI_NAME }}" \
+                        "Name=virtualization-type,Values=hvm" \
+                        "Name=root-device-type,Values=ebs" \
+              --query 'Images[0].ImageId' \
+              --output text)
+          else
+            echo "Using AMI from Packer build process"
+            AMI_ID="${{ needs.build-artifact.outputs.ami_id }}"
+          fi
+          echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+          echo "Using AMI ID: $AMI_ID"
+
       - name: Update Frontend ASG with new AMI
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
           LAUNCH_TEMPLATE_NAME: templete-for-heshbonaitplus-fontend
         run: |
+          AMI_ID=${{ steps.get_ami.outputs.ami_id }}
+          
           # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש
           NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
             --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
             --source-version '$Latest' \
             --launch-template-data '{
-              "ImageId":"${{ needs.build-artifact.outputs.ami_id }}"
+              "ImageId":"'"$AMI_ID"'"
             }' \
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
@@ -109,26 +153,30 @@ jobs:
           aws autoscaling start-instance-refresh \
             --auto-scaling-group-name $FRONTEND_ASG_NAME
 
-          echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: ${{ needs.build-artifact.outputs.ami_id }}"
+          echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: $AMI_ID"
 
-      - name: Verify Instances Health
+      - name: Wait for Instance Refresh Completion
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
         run: |
-          # המתנה לסיום רענון המופעים
-          aws autoscaling wait instance-refresh-in-progress \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME
-
-          # בדיקת סטטוס המופעים
-          UNHEALTHY_INSTANCES=$(aws autoscaling describe-auto-scaling-groups \
-            --auto-scaling-group-names $FRONTEND_ASG_NAME \
-            --query 'AutoScalingGroups[].Instances[?HealthStatus!=`Healthy`]' \
-            --output text)
-
-          if [ -z "$UNHEALTHY_INSTANCES" ]; then
-            echo "כל המופעים ב-$FRONTEND_ASG_NAME בריאים!"
-          else
-            echo "נמצאו מופעים לא בריאים ב-$FRONTEND_ASG_NAME:"
-            echo "$UNHEALTHY_INSTANCES"
-            exit 1
-          fi
+          echo "ממתין לסיום רענון המופעים..."
+          while true; do
+            REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name $FRONTEND_ASG_NAME \
+              --query 'InstanceRefreshes[0].Status' \
+              --output text)
+            
+            if [ "$REFRESH_STATUS" = "Successful" ]; then
+              echo "רענון המופעים הושלם בהצלחה!"
+              break
+            elif [ "$REFRESH_STATUS" = "Failed" ] || [ "$REFRESH_STATUS" = "Cancelled" ]; then
+              echo "רענון המופעים נכשל או בוטל. סטטוס: $REFRESH_STATUS"
+              exit 1
+            elif [ "$REFRESH_STATUS" = "InProgress" ]; then
+              echo "רענון המופעים עדיין בתהליך. סטטוס נוכחי: $REFRESH_STATUS"
+              sleep 30
+            else
+              echo "סטטוס לא צפוי: $REFRESH_STATUS. בודק שוב..."
+              sleep 30
+            fi
+          done
