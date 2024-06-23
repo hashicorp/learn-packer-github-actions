@@ -92,9 +92,7 @@ jobs:
           channel_name=$(echo "${{ github.ref_name }}" | sed 's/\\./-/g')
           ./create_channel_version.sh "$HCP_BUCKET_NAME" "$channel_name" "${{ needs.build-artifact.outputs.version_fingerprint }}"
 
-
-
- update-asg:
+  update-asg:
     name: Update Frontend Auto Scaling Group
     needs: build-artifact
     if: always()
@@ -137,8 +135,7 @@ jobs:
           if [ -n "$ACTIVE_REFRESH" ]; then
             echo "רענון מופעל פעיל כבר קיים. ממתין לסיום..."
             aws autoscaling wait instance-refresh-in-progress \
-              --auto-scaling-group-name $FRONTEND_ASG_NAME
-            echo "הרענון הקיים הסתיים. ממשיך לעדכון חדש."
+              --auto-scaling-group-name $F            echo "הרענון הקיים הסתיים. ממשיך לעדכון חדש."
           fi
           
           ASG_CONFIG=$(aws autoscaling describe-auto-scaling-groups \
@@ -146,80 +143,62 @@ jobs:
             --query 'AutoScalingGroups[0]')
           
           CURRENT_MIN=$(echo $ASG_CONFIG | jq -r '.MinSize')
-          CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSize')
-          CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
+          CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSi          CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
           
           echo "הגדלת Max Capacity זמנית ל-2"
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
           
-         - name: Update and Refresh ASG
-        env:
-          FRONTEND_ASG_NAME: scaling-group-dev-frontend
-          LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
-        run: |
-          # ... (החלק הקודם נשאר ללא שינוי)
-          
-          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
             --source-version '$Latest' \
             --launch-template-data '{
               "ImageId":"'"$AMI_ID"'",
-              "UserData":"'"$(echo '#!/bin/bash
-set -e
+      set -e
 echo "Starting application..."
 cd /home/ec2-user/app
 pm2 start npm --name "heshbonaitplus" -- start
 echo "Application started successfully."' | base64 -w 0)"'"
             }' \
             --query 'LaunchTemplateVersion.VersionNumber' \
-            --output text)
-          
+            -          
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version=$NEW_LAUNCH_TEMPLATE_VERSION
 
-          aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME \
+          aws aut            --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --preferences '{"MinHealthyPercentage": 100}'
 
           echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: $AMI_ID"
 
           echo "ממתין לסיום רענון המופעים..."
           while true; do
-            REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
-              --auto-scaling-group-name $FRONTEND_ASG_NAME \
+            REFRESH_STATUS=$(aws au              --auto-scaling-group-name $FRONTEND_ASG_NAME \
               --query 'InstanceRefreshes[0].Status' \
               --output text)
             
-            if [ "$REFRESH_STATUS" = "Successful" ]; then
-              echo "רענון המופעים הושלם בהצלחה!"
+            i              echo "רענון המופעים הושלם בהצלחה!"
               break
             elif [ "$REFRESH_STATUS" = "Failed" ] || [ "$REFRESH_STATUS" = "Cancelled" ]; then
               echo "רענון המופעים נכשל או בוטל. סטטוס: $REFRESH_STATUS"
-              exit 1
-            elif [ "$REFRESH_STATUS" = "InProgress" ]; then
+                       elif [ "$REFRESH_STATUS" = "InProgress" ]; then
               echo "רענון המופעים עדיין בתהליך. סטטוס נוכחי: $REFRESH_STATUS"
               sleep 30
             else
               echo "סטטוס לא צפוי: $REFRESH_STATUS. בודק שוב..."
               sleep 30
-            fi
-          done
+                      done
 
           TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names $FRONTEND_ASG_NAME \
             --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
             --output text)
 
-          echo "ממתין 60 שניות לפני בדיקת בריאות ה-ALB..."
-          sleep 60
+                 sleep 60
 
           TARGET_HEALTH=$(aws elbv2 describe-target-health \
             --target-group-arn $TARGET_GROUP_ARN \
-            --query 'TargetHealthDescriptions[0].TargetHealth.State' \
-            --output text)
+            --query 'TargetHealthDescriptions[0].TargetHealt            --output text)
 
           if [ "$TARGET_HEALTH" != "healthy" ]; then
             echo "המכונה החדשה לא בריאה ב-ALB. בודק את הלוגים ואת הגדרות האפליקציה."
@@ -230,8 +209,7 @@ echo "Application started successfully."' | base64 -w 0)"'"
 
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
-            --min-size $CURRENT_MIN \
-            --max-size $CURRENT_MAX \
+            --min-size            --max-size $CURRENT_MAX \
             --desired-capacity $CURRENT_DESIRED
 
           echo "update works!!"
