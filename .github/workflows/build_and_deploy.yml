@@ -105,7 +105,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
       
-      - name: Determine AMI ID
+      - name: Determine and Validate AMI ID
         id: get_ami
         run: |
           if [ -n "${{ github.event.inputs.manual_ami_id }}" ]; then
@@ -124,6 +124,13 @@ jobs:
             echo "Using AMI from Packer build process"
             AMI_ID="${{ needs.build-artifact.outputs.ami_id }}"
           fi
+
+          # בדיקת תקינות ה-AMI ID
+          if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
+            echo "Error: Invalid or missing AMI ID: '$AMI_ID'"
+            exit 1
+          fi
+
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
           echo "Using AMI ID: $AMI_ID"
 
@@ -134,6 +141,12 @@ jobs:
         run: |
           AMI_ID=${{ steps.get_ami.outputs.ami_id }}
           
+          # בדיקה נוספת של ה-AMI ID
+          if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
+            echo "Error: Invalid AMI ID: '$AMI_ID'"
+            exit 1
+          fi
+
           # בדיקה אם יש רענון פעיל
           ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
