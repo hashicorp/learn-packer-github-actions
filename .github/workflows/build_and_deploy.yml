@@ -127,13 +127,41 @@ jobs:
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
           echo "Using AMI ID: $AMI_ID"
 
-      - name: Update Frontend ASG with new AMI
+      - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
           LAUNCH_TEMPLATE_NAME: templete-for-heshbonaitplus-fontend
         run: |
           AMI_ID=${{ steps.get_ami.outputs.ami_id }}
           
+          # בדיקה אם יש רענון פעיל
+          ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
+            --auto-scaling-group-name $FRONTEND_ASG_NAME \
+            --query 'InstanceRefreshes[?Status==`InProgress`].InstanceRefreshId' \
+            --output text)
+
+          if [ -n "$ACTIVE_REFRESH" ]; then
+            echo "רענון מופעים פעיל כבר קיים. ממתין לסיומו..."
+            aws autoscaling wait instance-refresh-in-progress \
+              --auto-scaling-group-name $FRONTEND_ASG_NAME
+            echo "הרענון הקיים הסתיים. ממשיך לעדכון חדש."
+          fi
+
+          # קבלת הגדרות נוכחיות של ה-ASG
+          ASG_CONFIG=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names $FRONTEND_ASG_NAME \
+            --query 'AutoScalingGroups[0]')
+          
+          CURRENT_MIN=$(echo $ASG_CONFIG | jq -r '.MinSize')
+          CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSize')
+          CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
+
+          # הגדלה זמנית של Max Capacity ל-2
+          echo "הגדלת Max Capacity זמנית ל-2"
+          aws autoscaling update-auto-scaling-group \
+            --auto-scaling-group-name $FRONTEND_ASG_NAME \
+            --max-size 2
+
           # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש
           NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
             --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
@@ -144,21 +172,19 @@ jobs:
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
 
-          # עדכון ה-Frontend Auto Scaling Group
+          # עדכון ה-ASG
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version=$NEW_LAUNCH_TEMPLATE_VERSION
 
           # התחלת רענון המופעים
           aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME
+            --auto-scaling-group-name $FRONTEND_ASG_NAME \
+            --preferences '{"MinHealthyPercentage": 100}'
 
           echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: $AMI_ID"
 
-      - name: Wait for Instance Refresh Completion
-        env:
-          FRONTEND_ASG_NAME: scaling-group-dev-frontend
-        run: |
+          # המתנה לסיום הרענון
           echo "ממתין לסיום רענון המופעים..."
           while true; do
             REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
@@ -180,3 +206,33 @@ jobs:
               sleep 30
             fi
           done
+
+          # בדיקת בריאות המכונה ב-ALB
+          TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names $FRONTEND_ASG_NAME \
+            --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
+            --output text)
+
+          echo "ממתין 60 שניות לפני בדיקת בריאות ה-ALB..."
+          sleep 60
+
+          TARGET_HEALTH=$(aws elbv2 describe-target-health \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --query 'TargetHealthDescriptions[0].TargetHealth.State' \
+            --output text)
+
+          if [ "$TARGET_HEALTH" != "healthy" ]; then
+            echo "המכונה החדשה לא בריאה ב-ALB. בדוק את הלוגים ואת הגדרות האפליקציה."
+            exit 1
+          fi
+
+          echo "המכונה החדשה בריאה ב-ALB."
+
+          # החזרת ההגדרות המקוריות של ה-ASG
+          aws autoscaling update-auto-scaling-group \
+            --auto-scaling-group-name $FRONTEND_ASG_NAME \
+            --min-size $CURRENT_MIN \
+            --max-size $CURRENT_MAX \
+            --desired-capacity $CURRENT_DESIRED
+
+          echo "עדכון ה-ASG והחלפת המופעים הושלמו בהצלחה."
