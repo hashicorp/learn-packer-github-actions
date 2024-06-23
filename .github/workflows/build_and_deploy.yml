@@ -154,7 +154,7 @@ jobs:
             --source-version '$Latest' \
             --launch-template-data '{
               "ImageId":"'"$AMI_ID"'",
-              "UserData":"'"$(echo '#!/bin/bash
+              "UserData":"'"$(echo -n '#!/bin/bash
 set -e
 echo "Starting application..."
 cd /home/ec2-user/app
