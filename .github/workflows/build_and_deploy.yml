@@ -11,9 +11,14 @@ on:
         default: false
         type: boolean
       manual_ami_id:
-        description: 'Manually specify AMI ID (leave empty to use default)'
+        description: 'Manually specify AMI ID (leave empty to use default or built AMI)'
         required: false
         type: string
+      use_default_ami:
+        description: 'Use the default AMI'
+        required: true
+        default: false
+        type: boolean
 
 env:
   HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
@@ -33,7 +38,7 @@ jobs:
     outputs:
       version_fingerprint: ${{ steps.hcp.outputs.version_fingerprint }}
       ami_id: ${{ steps.ami.outputs.ami_id }}
-    if: github.event.inputs.run_update_asg_only != 'true'
+    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -95,134 +100,41 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
-      - name: Determine and Validate AMI ID
+      
+      - name: Determine AMI ID
         id: get_ami
         run: |
-          AMI_ID=${{ github.event.inputs.manual_ami_id }}
-          if [ -z "$AMI_ID" ]; then
+          if [ "${{ github.event.inputs.run_update_asg_only }}" == "true" ]; then
+            if [ "${{ github.event.inputs.use_default_ami }}" == "true" ]; then
+              AMI_ID=$(aws ec2 describe-images \
+                --owners ${{ env.DEFAULT_AMI_OWNER }} \
+                --filters "Name=name,Values=${{ env.DEFAULT_AMI_NAME }}" \
+                --query 'Images[0].ImageId' \
+                --output text)
+            elif [ -n "${{ github.event.inputs.manual_ami_id }}" ]; then
+              AMI_ID=${{ github.event.inputs.manual_ami_id }}
+            else
+              echo "Error: When running update ASG only, you must specify a manual AMI ID or use the default AMI."
+              exit 1
+            fi
+          else
             AMI_ID=${{ needs.build-artifact.outputs.ami_id }}
           fi
-          if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
-            echo "Error: Invalid AMI ID: '$AMI_ID'"
-            exit 1
-          fi
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+      
       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
           LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
         run: |
-          AMI_ID=${{ steps.get_ami.outputs.ami_id }}
-          
-          if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
-            echo "Error: Invalid AMI ID: '$AMI_ID'"
-            exit 1
-          fi
-          
-          ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME \
-            --query 'InstanceRefreshes[?Status==`InProgress`].InstanceRefreshId' \
-            --output text)
-          
-          if [ -n "$ACTIVE_REFRESH" ]; then
-            echo "רענון מופעל פעיל כבר קיים. ממתין לסיום..."
-            aws autoscaling wait instance-refresh-in-progress \
-              --auto-scaling-group-name $FRONTEND_ASG_NAME
-            echo "הרענון הקיים הסתיים. ממשיך לעדכון חדש."
-          fi
-          
-          ASG_CONFIG=$(aws autoscaling describe-auto-scaling-groups \
-            --auto-scaling-group-names $FRONTEND_ASG_NAME \
-            --query 'AutoScalingGroups[0]')
-          
-          CURRENT_MIN=$(echo $ASG_CONFIG | jq -r '.MinSize')
-          CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSize')
-          CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
-          
-          echo "הגדלת Max Capacity זמנית ל-2"
-          aws autoscaling update-auto-scaling-group \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME \
-            --max-size 2
-          
-           USER_DATA=$(cat << 'EOF' | base64 -w 0
-#!/bin/bash
-set -e
-echo "Starting application..."
-cd /home/ec2-user/app
-pm2 start npm --name "heshbonaitplus" -- start
-echo "Application started successfully."
-EOF
-)
-          
-          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-            --source-version '$Latest' \
-            --launch-template-data "{\"ImageId\":\"$AMI_ID\",\"UserData\":\"$USER_DATA\"}" \
-            --query 'LaunchTemplateVersion.VersionNumber' \
-            --output text)
-          
-          aws autoscaling update-auto-scaling-group \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME \
-            --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version=$NEW_LAUNCH_TEMPLATE_VERSION
-          
-          aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME \
-            --preferences '{"MinHealthyPercentage": 100}'
-          
-          echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: $AMI_ID"
-          
-          echo "ממתין לסיום רענון המופעים..."
-          while true; do
-            REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
-              --auto-scaling-group-name $FRONTEND_ASG_NAME \
-              --query 'InstanceRefreshes[0].Status' \
-              --output text)
-            
-            if [ "$REFRESH_STATUS" = "Successful" ]; then
-              echo "רענון המופעים הושלם בהצלחה!"
-              break
-            elif [ "$REFRESH_STATUS" = "Failed" ] || [ "$REFRESH_STATUS" = "Cancelled" ]; then
-              echo "רענון המופעים נכשל או בוטל. סטטוס: $REFRESH_STATUS"
-              exit 1
-            elif [ "$REFRESH_STATUS" = "InProgress" ]; then
-              echo "רענון המופעים עדיין בתהליך. סטטוס נוכחי: $REFRESH_STATUS"
-              sleep 30
-            else
-              echo "סטטוס לא צפוי: $REFRESH_STATUS. בודק שוב..."
-              sleep 30
-            fi
-          done
-          
-          TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
-            --auto-scaling-group-names $FRONTEND_ASG_NAME \
-            --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
-            --output text)
-          
-          echo "ממתין 60 שניות לפני בדיקת בריאות ה-ALB..."
-          sleep 60
-          
-          TARGET_HEALTH=$(aws elbv2 describe-target-health \
-            --target-group-arn $TARGET_GROUP_ARN \
-            --query 'TargetHealthDescriptions[0].TargetHealth.State' \
-            --output text)
-          
-          if [ "$TARGET_HEALTH" != "healthy" ]; then
-            echo "המכונה החדשה לא בריאה ב-ALB. בודק את הלוגים ואת הגדרות האפליקציה."
-            exit 1
-          fi
-          
-          echo "המכונה החדשה בריאה ב-ALB."
-          
-          aws autoscaling update-auto-scaling-group \
-            --auto-scaling-group-name $FRONTEND_ASG_NAME \
-            --min-size $CURRENT_MIN \
-            --max-size $CURRENT_MAX \
-            --desired-capacity $CURRENT_DESIRED
-          
-          echo "update works!!"
+          chmod +x .github/scripts/update_asg.sh
+          .github/scripts/update_asg.sh "${{ steps.get_ami.outputs.ami_id }}" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
