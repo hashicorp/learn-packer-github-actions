@@ -1,7 +1,7 @@
 name: Build and Deploy
 on:
   push:
-    tags: ["v[0-9].[0-9]+.[0-9]+"]
+    tags: ["v[0-9]+\\.[0-9]+\\.[0-9]+"]
     branches:
       - "development"
       - "staging"
@@ -11,7 +11,7 @@ on:
       run_update_asg_only:
         description: 'Run only the update ASG process'
         required: true
-        default: 'false'
+        default: false
         type: boolean
       manual_ami_id:
         description: 'Manually specify AMI ID (leave empty to use default)'
@@ -39,9 +39,9 @@ jobs:
     if: github.event.inputs.run_update_asg_only != 'true'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4.0.0
+        uses: actions/checkout@v4
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -77,36 +77,45 @@ jobs:
           ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
           echo "AMI ID from Packer build: $ami_id"
+
   update-hcp-packer-channel:
     name: Update HCP Packer channel
-    needs: ["build-artifact"]
+    needs: build-artifact
     runs-on: ubuntu-latest
     if: github.event.inputs.run_update_asg_only != 'true'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4.0.0
+        uses: actions/checkout@v4
       - name: Create and set channel
         working-directory: .github/scripts
         run: |
-          channel_name=$(echo ${{ github.ref_name }} | sed 's/\./-/g')
+          channel_name=$(echo ${{ github.ref_name }} | sed 's/\\./-/g')
           ./create_channel_version.sh $HCP_BUCKET_NAME $channel_name "${{ needs.build-artifact.outputs.version_fingerprint }}"
+
   update-asg:
     name: Update Frontend Auto Scaling Group
-    needs: ["build-artifact"]
+    needs: build-artifact
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
-      
       - name: Determine and Validate AMI ID
         id: get_ami
         run: |
-          # ... (קוד קודם שלא נראה)
+          AMI_ID=${{ github.event.inputs.manual_ami_id }}
+          if [ -z "$AMI_ID" ]; then
+            AMI_ID=${{ needs.build-artifact.outputs.ami_id }}
+          fi
+          if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
+            echo "Error: Invalid AMI ID: '$AMI_ID'"
+            exit 1
+          fi
+          echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
 
       - name: Update and Refresh ASG
         env:
@@ -115,12 +124,10 @@ jobs:
         run: |
           AMI_ID=${{ steps.get_ami.outputs.ami_id }}
           
-          # בדיקה נוספת של ה-AMI ID
           if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
             echo "Error: Invalid AMI ID: '$AMI_ID'"
             exit 1
           fi
-          # בדיקה אם יש רענון פעיל
           ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --query 'InstanceRefreshes[?Status==`InProgress`].InstanceRefreshId' \
@@ -131,7 +138,7 @@ jobs:
               --auto-scaling-group-name $FRONTEND_ASG_NAME
             echo "הרענון הקיים הסתיים. ממשיך לעדכון חדש."
           fi
-          # קבלת הגדרות נוכחיות של ה-ASG
+          
           ASG_CONFIG=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names $FRONTEND_ASG_NAME \
             --query 'AutoScalingGroups[0]')
@@ -139,18 +146,18 @@ jobs:
           CURRENT_MIN=$(echo $ASG_CONFIG | jq -r '.MinSize')
           CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSize')
           CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
-          # הגדלה זמנית של Max Capacity ל-2
+          
           echo "הגדלת Max Capacity זמנית ל-2"
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
-          # יצירת גרסה חדשה של התבנית עם AMI חדש ו-User Data מעודכן
+          
           NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
             --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
             --source-version '$Latest' \
             --launch-template-data '{
               "ImageId":"'"$AMI_ID"'",
-              "UserData":"'"$(cat << 'EOF' | base64 -w 0
+              "UserData":"'"$(cat <<'EOF' | base64 -w 0
 #!/bin/bash
 set -e
 echo "Starting application..."
@@ -158,24 +165,21 @@ cd /home/ec2-user/app
 pm2 start npm --name "heshbonaitplus" -- start
 echo "Application started successfully."
 EOF
-              )"'"
+          )"'"
             }' \
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
-
-          # עדכון ה-ASG
+          
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --launch-template LaunchTemplateName=$LAUNCH_TEMPLATE_NAME,Version=$NEW_LAUNCH_TEMPLATE_VERSION
 
-          # התחלת רענון המופעים
           aws autoscaling start-instance-refresh \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --preferences '{"MinHealthyPercentage": 100}'
 
           echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME עודכן עם AMI חדש: $AMI_ID"
 
-          # המתנה לסיום הרענון
           echo "ממתין לסיום רענון המופעים..."
           while true; do
             REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
@@ -198,7 +202,6 @@ EOF
             fi
           done
 
-          # בדיקת בריאות המכונה ב-ALB
           TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names $FRONTEND_ASG_NAME \
             --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
@@ -219,11 +222,10 @@ EOF
 
           echo "המכונה החדשה בריאה ב-ALB."
 
-          # החזרת הגדרות המינימום והמקסימום של ה-ASG
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --min-size $CURRENT_MIN \
             --max-size $CURRENT_MAX \
             --desired-capacity $CURRENT_DESIRED
 
-          echo "עדכון ה-ASG והשלמת הרענון הושלמו בהצלחה."
+          echo "update works!!"
