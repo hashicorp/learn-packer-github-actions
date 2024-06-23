@@ -92,7 +92,7 @@ jobs:
           channel_name=$(echo ${{ github.ref_name }} | sed 's/\\./-/g')
           ./create_channel_version.sh $HCP_BUCKET_NAME $channel_name "${{ needs.build-artifact.outputs.version_fingerprint }}"
 
-  update-asg:
+ update-asg:
     name: Update Frontend Auto Scaling Group
     needs: build-artifact
     if: always()
@@ -117,7 +117,7 @@ jobs:
           fi
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
 
-       - name: Update and Refresh ASG
+      - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
           LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
