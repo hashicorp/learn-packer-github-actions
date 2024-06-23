@@ -39,9 +39,9 @@ jobs:
     if: github.event.inputs.run_update_asg_only != 'true'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@v4.0.0
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@8c3f20df09ac63af7b3ae3d7c91f105f857d8497 # v4.0.0
+        uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -77,7 +77,6 @@ jobs:
           ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
           echo "AMI ID from Packer build: $ami_id"
-
   update-hcp-packer-channel:
     name: Update HCP Packer channel
     needs: ["build-artifact"]
@@ -85,13 +84,12 @@ jobs:
     if: github.event.inputs.run_update_asg_only != 'true'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@v4.0.0
       - name: Create and set channel
         working-directory: .github/scripts
         run: |
-          channel_name=$( echo ${{github.ref_name}} | sed 's/\./-/g')
+          channel_name=$(echo ${{ github.ref_name }} | sed 's/\./-/g')
           ./create_channel_version.sh $HCP_BUCKET_NAME $channel_name "${{ needs.build-artifact.outputs.version_fingerprint }}"
-
   update-asg:
     name: Update Frontend Auto Scaling Group
     needs: ["build-artifact"]
@@ -99,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@8c3f20df09ac63af7b3ae3d7c91f105f857d8497 # v4.0.0
+        uses: aws-actions/configure-aws-credentials@v4.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -108,12 +106,12 @@ jobs:
       - name: Determine and Validate AMI ID
         id: get_ami
         run: |
-          # ... (קוד קודם נשאר ללא שינוי)
+          # ... (קוד קודם שלא נראה)
 
       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
-          LAUNCH_TEMPLATE_NAME: templete-for-heshbonaitplus-fontend
+          LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
         run: |
           AMI_ID=${{ steps.get_ami.outputs.ami_id }}
           
@@ -122,20 +120,17 @@ jobs:
             echo "Error: Invalid AMI ID: '$AMI_ID'"
             exit 1
           fi
-
           # בדיקה אם יש רענון פעיל
           ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --query 'InstanceRefreshes[?Status==`InProgress`].InstanceRefreshId' \
             --output text)
-
           if [ -n "$ACTIVE_REFRESH" ]; then
-            echo "רענון מופעים פעיל כבר קיים. ממתין לסיומו..."
+            echo "רענון מופעל פעיל כבר קיים. ממתין לסיום..."
             aws autoscaling wait instance-refresh-in-progress \
               --auto-scaling-group-name $FRONTEND_ASG_NAME
             echo "הרענון הקיים הסתיים. ממשיך לעדכון חדש."
           fi
-
           # קבלת הגדרות נוכחיות של ה-ASG
           ASG_CONFIG=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names $FRONTEND_ASG_NAME \
@@ -144,20 +139,18 @@ jobs:
           CURRENT_MIN=$(echo $ASG_CONFIG | jq -r '.MinSize')
           CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSize')
           CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
-
           # הגדלה זמנית של Max Capacity ל-2
           echo "הגדלת Max Capacity זמנית ל-2"
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
-
-          # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש ו-User Data מעודכן
-         NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
-  --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-  --source-version '$Latest' \
-  --launch-template-data '{
-    "ImageId":"'"$AMI_ID"'",
-    "UserData":"'"$(cat << 'EOF' | base64 -w 0
+          # יצירת גרסה חדשה של התבנית עם AMI חדש ו-User Data מעודכן
+          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
+            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+            --source-version '$Latest' \
+            --launch-template-data '{
+              "ImageId":"'"$AMI_ID"'",
+              "UserData":"'"$(cat << 'EOF' | base64 -w 0
 #!/bin/bash
 set -e
 echo "Starting application..."
@@ -165,10 +158,10 @@ cd /home/ec2-user/app
 pm2 start npm --name "heshbonaitplus" -- start
 echo "Application started successfully."
 EOF
-)"'"
-  }' \
-  --query 'LaunchTemplateVersion.VersionNumber' \
-  --output text)
+              )"'"
+            }' \
+            --query 'LaunchTemplateVersion.VersionNumber' \
+            --output text)
 
           # עדכון ה-ASG
           aws autoscaling update-auto-scaling-group \
@@ -220,17 +213,17 @@ EOF
             --output text)
 
           if [ "$TARGET_HEALTH" != "healthy" ]; then
-            echo "המכונה החדשה לא בריאה ב-ALB. בדוק את הלוגים ואת הגדרות האפליקציה."
+            echo "המכונה החדשה לא בריאה ב-ALB. בודק את הלוגים ואת הגדרות האפליקציה."
             exit 1
           fi
 
           echo "המכונה החדשה בריאה ב-ALB."
 
-          # החזרת ההגדרות המקוריות של ה-ASG
+          # החזרת הגדרות המינימום והמקסימום של ה-ASG
           aws autoscaling update-auto-scaling-group \
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --min-size $CURRENT_MIN \
             --max-size $CURRENT_MAX \
             --desired-capacity $CURRENT_DESIRED
 
-          echo "עדכון ה-ASG והחלפת המופעים הושלמו בהצלחה."
+          echo "עדכון ה-ASG והשלמת הרענון הושלמו בהצלחה."
