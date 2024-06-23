@@ -102,14 +102,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
-      
       - name: Determine AMI ID
         id: get_ami
         run: |
@@ -130,11 +128,10 @@ jobs:
             AMI_ID=${{ needs.build-artifact.outputs.ami_id }}
           fi
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
-      
       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
           LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
         run: |
-          chmod +x .github/scripts/update_asg.sh
-          .github/scripts/update_asg.sh "${{ steps.get_ami.outputs.ami_id }}" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
+          chmod +x .github/scripts/Updated\ update_asg.sh
+          .github/scripts/Updated\ update_asg.sh "${{ steps.get_ami.outputs.ami_id }}" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
