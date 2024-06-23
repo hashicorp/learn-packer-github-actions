@@ -93,6 +93,7 @@ jobs:
           ./create_channel_version.sh "$HCP_BUCKET_NAME" "$channel_name" "${{ needs.build-artifact.outputs.version_fingerprint }}"
 
 
+
  update-asg:
     name: Update Frontend Auto Scaling Group
     needs: build-artifact
