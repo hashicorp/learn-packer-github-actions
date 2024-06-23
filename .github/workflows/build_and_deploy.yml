@@ -152,21 +152,23 @@ jobs:
             --max-size 2
 
           # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש ו-User Data מעודכן
-          NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
-            --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-            --source-version '$Latest' \
-            --launch-template-data '{
-              "ImageId":"'"$AMI_ID"'",
-              "UserData":"'"$(echo -n '#!/bin/bash
+         NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
+  --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+  --source-version '$Latest' \
+  --launch-template-data '{
+    "ImageId":"'"$AMI_ID"'",
+    "UserData":"'"$(cat << 'EOF' | base64 -w 0
+#!/bin/bash
 set -e
 echo "Starting application..."
 cd /home/ec2-user/app
 pm2 start npm --name "heshbonaitplus" -- start
 echo "Application started successfully."
-' | base64 -w 0)"'"
-            }' \
-            --query 'LaunchTemplateVersion.VersionNumber' \
-            --output text)
+EOF
+)"'"
+  }' \
+  --query 'LaunchTemplateVersion.VersionNumber' \
+  --output text)
 
           # עדכון ה-ASG
           aws autoscaling update-auto-scaling-group \
