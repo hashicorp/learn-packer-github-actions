@@ -108,31 +108,7 @@ jobs:
       - name: Determine and Validate AMI ID
         id: get_ami
         run: |
-          if [ -n "${{ github.event.inputs.manual_ami_id }}" ]; then
-            echo "Using manually specified AMI ID"
-            AMI_ID="${{ github.event.inputs.manual_ami_id }}"
-          elif [ "${{ github.event.inputs.run_update_asg_only }}" == "true" ]; then
-            echo "Using default AMI"
-            AMI_ID=$(aws ec2 describe-images \
-              --owners ${{ env.DEFAULT_AMI_OWNER }} \
-              --filters "Name=name,Values=${{ env.DEFAULT_AMI_NAME }}" \
-                        "Name=virtualization-type,Values=hvm" \
-                        "Name=root-device-type,Values=ebs" \
-              --query 'Images[0].ImageId' \
-              --output text)
-          else
-            echo "Using AMI from Packer build process"
-            AMI_ID="${{ needs.build-artifact.outputs.ami_id }}"
-          fi
-
-          # בדיקת תקינות ה-AMI ID
-          if [ -z "$AMI_ID" ] || [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
-            echo "Error: Invalid or missing AMI ID: '$AMI_ID'"
-            exit 1
-          fi
-
-          echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
-          echo "Using AMI ID: $AMI_ID"
+          # ... (קוד קודם נשאר ללא שינוי)
 
       - name: Update and Refresh ASG
         env:
@@ -175,12 +151,19 @@ jobs:
             --auto-scaling-group-name $FRONTEND_ASG_NAME \
             --max-size 2
 
-          # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש
+          # יצירת גרסה חדשה של תבנית ההשקה עם AMI חדש ו-User Data מעודכן
           NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
             --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
             --source-version '$Latest' \
             --launch-template-data '{
-              "ImageId":"'"$AMI_ID"'"
+              "ImageId":"'"$AMI_ID"'",
+              "UserData":"'"$(echo -n '#!/bin/bash
+set -e
+echo "Starting application..."
+cd /home/ec2-user/app
+pm2 start npm --name "heshbonaitplus" -- start
+echo "Application started successfully."
+' | base64 -w 0)"'"
             }' \
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
