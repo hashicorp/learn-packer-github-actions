@@ -1,64 +1,38 @@
 #!/bin/bash
 
+# Set execute permissions for the script
+chmod +x "$0"
+
 set -e
 
 AMI_ID=$1
 FRONTEND_ASG_NAME=$2
 LAUNCH_TEMPLATE_NAME=$3
 
-# Validate input parameters
-if [ -z "$AMI_ID" ] || [ -z "$FRONTEND_ASG_NAME" ] || [ -z "$LAUNCH_TEMPLATE_NAME" ]; then
-  echo "Error: Missing required parameters. Usage: $0 <AMI_ID> <FRONTEND_ASG_NAME> <LAUNCH_TEMPLATE_NAME>"
-  exit 1
-fi
-
-if [[ ! "$AMI_ID" =~ ^ami-[a-f0-9]{8,17}$ ]]; then
-  echo "Error: Invalid AMI ID: '$AMI_ID'"
-  exit 1
-fi
-
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 
-ACTIVE_REFRESH=$(aws autoscaling describe-instance-refreshes \
-  --auto-scaling-group-name $FRONTEND_ASG_NAME \
-  --query 'InstanceRefreshes[?Status==`InProgress`].InstanceRefreshId' \
-  --output text)
-
-if [ -n "$ACTIVE_REFRESH" ]; then
-  echo "Active refresh found. Waiting for it to complete..."
-  aws autoscaling wait instance-refresh-in-progress \
-    --auto-scaling-group-name $FRONTEND_ASG_NAME
-  echo "Existing refresh completed. Proceeding with new update."
+# Check if Launch Template exists
+if ! aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_NAME" > /dev/null 2>&1; then
+    echo "Launch Template $LAUNCH_TEMPLATE_NAME does not exist. Creating it..."
+    aws ec2 create-launch-template \
+        --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+        --version-description "Initial version" \
+        --launch-template-data "{\"ImageId\":\"$AMI_ID\"}"
+    echo "Launch Template created successfully."
+else
+    echo "Launch Template $LAUNCH_TEMPLATE_NAME exists. Proceeding with update."
 fi
-
-ASG_CONFIG=$(aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names $FRONTEND_ASG_NAME \
-  --query 'AutoScalingGroups[0]')
-
-CURRENT_MIN=$(echo $ASG_CONFIG | jq -r '.MinSize')
-CURRENT_MAX=$(echo $ASG_CONFIG | jq -r '.MaxSize')
-CURRENT_DESIRED=$(echo $ASG_CONFIG | jq -r '.DesiredCapacity')
 
 echo "Temporarily increasing Max Capacity to 2"
 aws autoscaling update-auto-scaling-group \
   --auto-scaling-group-name $FRONTEND_ASG_NAME \
   --max-size 2
 
-USER_DATA=$(cat << 'EOF' | base64 -w 0
-#!/bin/bash
-set -e
-echo "Starting application..."
-cd /home/ec2-user/app
-pm2 start npm --name "heshbonaitplus" -- start
-echo "Application started successfully."
-EOF
-)
-
 echo "Creating new Launch Template version"
 NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
   --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
   --source-version '$Latest' \
-  --launch-template-data "{\"ImageId\":\"$AMI_ID\",\"UserData\":\"$USER_DATA\"}" \
+  --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
   --query 'LaunchTemplateVersion.VersionNumber' \
   --output text)
 
@@ -71,8 +45,6 @@ echo "Starting instance refresh"
 aws autoscaling start-instance-refresh \
   --auto-scaling-group-name $FRONTEND_ASG_NAME \
   --preferences '{"MinHealthyPercentage": 100}'
-
-echo "Frontend Auto Scaling Group $FRONTEND_ASG_NAME updated with new AMI: $AMI_ID"
 
 echo "Waiting for instance refresh to complete..."
 while true; do
@@ -115,12 +87,5 @@ if [ "$TARGET_HEALTH" != "healthy" ]; then
 fi
 
 echo "New instance is healthy in ALB."
-
-echo "Restoring original ASG settings"
-aws autoscaling update-auto-scaling-group \
-  --auto-scaling-group-name $FRONTEND_ASG_NAME \
-  --min-size $CURRENT_MIN \
-  --max-size $CURRENT_MAX \
-  --desired-capacity $CURRENT_DESIRED
 
 echo "ASG update process completed successfully!"
