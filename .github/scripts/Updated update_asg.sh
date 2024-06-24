@@ -8,8 +8,17 @@ set -e
 AMI_ID=$1
 FRONTEND_ASG_NAME=$2
 LAUNCH_TEMPLATE_NAME=$3
+INSTANCE_TYPE="t3.micro"
 
 echo "Starting ASG update process with AMI ID: $AMI_ID"
+
+# Check if jq is installed
+if ! command -v jq &> /dev/null; then
+    echo "jq is not installed. Using alternative method."
+    JQ_INSTALLED=false
+else
+    JQ_INSTALLED=true
+fi
 
 # Check if Launch Template exists
 if ! aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_NAME" > /dev/null 2>&1; then
@@ -17,7 +26,7 @@ if ! aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE
     aws ec2 create-launch-template \
         --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
         --version-description "Initial version" \
-        --launch-template-data "{\"ImageId\":\"$AMI_ID\"}"
+        --launch-template-data "{\"ImageId\":\"$AMI_ID\",\"InstanceType\":\"$INSTANCE_TYPE\"}"
     echo "Launch Template created successfully."
 else
     echo "Launch Template $LAUNCH_TEMPLATE_NAME exists. Proceeding with update."
@@ -29,10 +38,28 @@ aws autoscaling update-auto-scaling-group \
   --max-size 2
 
 echo "Creating new Launch Template version"
+if $JQ_INSTALLED; then
+    LATEST_LAUNCH_TEMPLATE=$(aws ec2 describe-launch-template-versions \
+      --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+      --versions '$Latest' \
+      --query 'LaunchTemplateVersions[0].LaunchTemplateData' \
+      --output json)
+
+    NEW_LAUNCH_TEMPLATE_DATA=$(echo $LATEST_LAUNCH_TEMPLATE | jq --arg AMI_ID "$AMI_ID" '.ImageId = $AMI_ID')
+else
+    # Alternative method without jq
+    LATEST_LAUNCH_TEMPLATE=$(aws ec2 describe-launch-template-versions \
+      --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
+      --versions '$Latest' \
+      --query 'LaunchTemplateVersions[0].LaunchTemplateData' \
+      --output text)
+
+    NEW_LAUNCH_TEMPLATE_DATA="{\"ImageId\":\"$AMI_ID\",\"InstanceType\":\"$INSTANCE_TYPE\"}"
+fi
+
 NEW_LAUNCH_TEMPLATE_VERSION=$(aws ec2 create-launch-template-version \
   --launch-template-name "$LAUNCH_TEMPLATE_NAME" \
-  --source-version '$Latest' \
-  --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+  --launch-template-data "$NEW_LAUNCH_TEMPLATE_DATA" \
   --query 'LaunchTemplateVersion.VersionNumber' \
   --output text)
 
