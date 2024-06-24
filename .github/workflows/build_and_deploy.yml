@@ -84,7 +84,7 @@ jobs:
     name: Update HCP Packer channel
     needs: build-artifact
     runs-on: ubuntu-latest
-    if: github.event.inputs.run_update_asg_only != 'true'
+    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -93,6 +93,7 @@ jobs:
         run: |
           channel_name=$(echo "${{ github.ref_name }}" | sed 's/\\./-/g')
           ./create_channel_version.sh "$HCP_BUCKET_NAME" "$channel_name" "${{ needs.build-artifact.outputs.version_fingerprint }}"
+
 
   update-asg:
     name: Update Frontend Auto Scaling Group
@@ -111,19 +112,17 @@ jobs:
       - name: Determine AMI ID
         id: get_ami
         run: |
-          if [ "${{ github.event.inputs.run_update_asg_only }}" == "true" ]; then
-            if [ "${{ github.event.inputs.use_default_ami }}" == "true" ]; then
-              AMI_ID=$(aws ec2 describe-images \
-                --owners ${{ env.DEFAULT_AMI_OWNER }} \
-                --filters "Name=name,Values=${{ env.DEFAULT_AMI_NAME }}" \
-                --query 'Images[0].ImageId' \
-                --output text)
-            elif [ -n "${{ github.event.inputs.manual_ami_id }}" ]; then
-              AMI_ID=${{ github.event.inputs.manual_ami_id }}
-            else
-              echo "Error: When running update ASG only, you must specify a manual AMI ID or use the default AMI."
-              exit 1
-            fi
+          if [ "${{ github.event.inputs.use_default_ami }}" == "true" ]; then
+            AMI_ID=$(aws ec2 describe-images \
+              --owners ${{ env.DEFAULT_AMI_OWNER }} \
+              --filters "Name=name,Values=${{ env.DEFAULT_AMI_NAME }}" \
+              --query 'Images[0].ImageId' \
+              --output text)
+          elif [ -n "${{ github.event.inputs.manual_ami_id }}" ]; then
+            AMI_ID=${{ github.event.inputs.manual_ami_id }}
+          elif [ "${{ github.event.inputs.run_update_asg_only }}" == "true" ]; then
+            echo "Error: When running update ASG only, you must specify a manual AMI ID or use the default AMI."
+            exit 1
           else
             AMI_ID=${{ needs.build-artifact.outputs.ami_id }}
           fi
