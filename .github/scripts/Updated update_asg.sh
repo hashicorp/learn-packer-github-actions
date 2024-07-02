@@ -9,28 +9,8 @@ LAUNCH_TEMPLATE_NAME=$3
 
 # הגדרת משתנים לתיקיית האפליקציה ו-URL של המאגר
 REPO_PATH="/home/ec2-user/app"
-REPO_URL="https://github.com/dvirmoyal/learn-packer-github-actions.git"  
+REPO_URL="https://github.com/dvirmoyal/learn-packer-github-actions.git"
 
-echo "Starting repository setup and update process..."
-
-# יצירת תיקייה חדשה (אם היא לא קיימת)
-mkdir -p "$REPO_PATH"
-cd "$REPO_PATH"
-
-# שיבוט (clone) של המאגר
-echo "Cloning the repository..."
-git clone "$REPO_URL" .
-
-# התקנת תלויות ועדכון האפליקציה
-echo "Installing dependencies..."
-npm install
-
-echo "Starting/restarting the application..."
-pm2 restart all || pm2 start app.js
-
-echo "Repository setup and update process completed."
-
-# המשך התהליך המקורי של עדכון ה-ASG
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 
 # Check if Launch Template exists
@@ -95,13 +75,71 @@ while true; do
   fi
 done
 
+# Get the ID of the new instance
+NEW_INSTANCE_ID=$(aws autoscaling describe-auto-scaling-groups \
+  --auto-scaling-group-names $FRONTEND_ASG_NAME \
+  --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId' \
+  --output text | awk '{print $NF}')
+
+echo "New instance ID: $NEW_INSTANCE_ID"
+
+# Wait for the instance to be fully initialized
+echo "Waiting for instance to be fully initialized..."
+aws ec2 wait instance-status-ok --instance-ids $NEW_INSTANCE_ID
+
+# Update application on the new instance
+echo "Updating application on the new instance..."
+aws ssm send-command \
+  --instance-ids $NEW_INSTANCE_ID \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{
+    "commands":[
+      "mkdir -p '"$REPO_PATH"'",
+      "cd '"$REPO_PATH"'",
+      "git clone '"$REPO_URL"' .",
+      "npm install",
+      "pm2 restart all || pm2 start app.js"
+    ]
+  }'
+
+# Check if the application is running
+echo "Checking if the application is running..."
+APP_STATUS=$(aws ssm send-command \
+  --instance-ids $NEW_INSTANCE_ID \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{"commands":["pm2 list"]}' \
+  --output text --query "CommandInvocations[0].CommandPlugins[0].Output")
+
+if [[ $APP_STATUS != *"online"* ]]; then
+  echo "Application is not running. Attempting to start..."
+  aws ssm send-command \
+    --instance-ids $NEW_INSTANCE_ID \
+    --document-name "AWS-RunShellScript" \
+    --parameters '{"commands":["cd '"$REPO_PATH"' && pm2 start app.js"]}'
+  
+  # Wait a bit and check again
+  sleep 30
+  APP_STATUS=$(aws ssm send-command \
+    --instance-ids $NEW_INSTANCE_ID \
+    --document-name "AWS-RunShellScript" \
+    --parameters '{"commands":["pm2 list"]}' \
+    --output text --query "CommandInvocations[0].CommandPlugins[0].Output")
+  
+  if [[ $APP_STATUS != *"online"* ]]; then
+    echo "Failed to start the application. Please check the instance manually."
+    exit 1
+  fi
+fi
+
+echo "Application is running."
+
 TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
-  --auto-scanning-group-names $FRONTEND_ASG_NAME \
+  --auto-scaling-group-names $FRONTEND_ASG_NAME \
   --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
   --output text)
 
-echo "Waiting 60 seconds before checking ALB health..."
-sleep 60
+echo "Waiting 90 seconds before checking ALB health..."
+sleep 90
 
 TARGET_HEALTH=$(aws elbv2 describe-target-health \
   --target-group-arn $TARGET_GROUP_ARN \
