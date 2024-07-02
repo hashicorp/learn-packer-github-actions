@@ -30,6 +30,7 @@ env:
   SSH_PACKER_PUB: ${{ secrets.SSH_PACKER_PUB }}
   DEFAULT_AMI_NAME: "al2023-ami-2023.4.20240528.0-kernel-6.1-x86_64"
   DEFAULT_AMI_OWNER: "659248058490"
+   AMI_ID: ami-02bd14a7de0ef4613
 
 jobs:
   build-artifact:
@@ -130,7 +131,7 @@ jobs:
       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: scaling-group-dev-frontend
-          LAUNCH_TEMPLATE_NAME: template-for-heshbonaitplus-frontend
+          LAUNCH_TEMPLATE_NAME: templete-for-heshbonaitplus-fontend
         run: |
           chmod +x .github/scripts/Updated\ update_asg.sh
           .github/scripts/Updated\ update_asg.sh "${{ steps.get_ami.outputs.ami_id }}" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
