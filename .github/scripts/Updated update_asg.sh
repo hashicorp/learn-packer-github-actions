@@ -7,29 +7,28 @@ AMI_ID=$1
 FRONTEND_ASG_NAME=$2
 LAUNCH_TEMPLATE_NAME=$3
 
-# עדכון המאגר
+# הגדרת משתנים לתיקיית האפליקציה ו-URL של המאגר
 REPO_PATH="/home/ec2-user/app"
-echo "Updating repository..."
+REPO_URL="https://github.com/dvirmoyal/learn-packer-github-actions.git"  
+
+echo "Starting repository setup and update process..."
+
+# יצירת תיקייה חדשה (אם היא לא קיימת)
+mkdir -p "$REPO_PATH"
 cd "$REPO_PATH"
 
-# שמירת שינויים מקומיים (אם יש)
-git stash
-
-# ניסיון לעדכן את המאגר
-if git pull --rebase --autostash origin main; then
-    echo "Repository updated successfully."
-else
-    echo "Failed to update repository. Resetting to origin/main..."
-    git fetch origin
-    git reset --hard origin/main
-    git clean -fd
-fi
+# שיבוט (clone) של המאגר
+echo "Cloning the repository..."
+git clone "$REPO_URL" .
 
 # התקנת תלויות ועדכון האפליקציה
+echo "Installing dependencies..."
 npm install
+
+echo "Starting/restarting the application..."
 pm2 restart all || pm2 start app.js
 
-echo "Repository update process completed."
+echo "Repository setup and update process completed."
 
 # המשך התהליך המקורי של עדכון ה-ASG
 echo "Starting ASG update process with AMI ID: $AMI_ID"
