@@ -7,7 +7,7 @@ set -e
 
 AMI_ID=$1
 FRONTEND_ASG_NAME=$2
-LAUNCH_TEMPLATE_NAME=$3
+LAUNCH_TEMPLATE_NAME="templete-for-heshbonaitplus-fontend"
 
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 
