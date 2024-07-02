@@ -87,20 +87,24 @@ echo "New instance ID: $NEW_INSTANCE_ID"
 echo "Waiting for instance to be fully initialized..."
 aws ec2 wait instance-status-ok --instance-ids $NEW_INSTANCE_ID
 
-# Update application on the new instance
-echo "Updating application on the new instance..."
+echo "Updating and starting application on the new instance..."
 aws ssm send-command \
   --instance-ids $NEW_INSTANCE_ID \
   --document-name "AWS-RunShellScript" \
   --parameters '{
     "commands":[
-      "mkdir -p '"$REPO_PATH"'",
-      "cd '"$REPO_PATH"'",
-      "git clone '"$REPO_URL"' .",
+      "cd /home/ec2-user/app",
+      "git pull",
       "npm install",
-      "pm2 restart all || pm2 start app.js"
+      "npm run build",
+      "pm2 delete heshbonaitplus || true",
+      "pm2 start npm --name \"heshbonaitplus\" -- start"
     ]
   }'
+
+echo "Waiting 60 seconds for the application to start..."
+sleep 60
+
 
 # Check if the application is running
 echo "Checking if the application is running..."
