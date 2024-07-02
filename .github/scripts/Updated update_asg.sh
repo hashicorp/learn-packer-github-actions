@@ -1,14 +1,37 @@
 #!/bin/bash
-
 # Set execute permissions for the script
 chmod +x "$0"
-
 set -e
 
 AMI_ID=$1
 FRONTEND_ASG_NAME=$2
 LAUNCH_TEMPLATE_NAME=$3
 
+# עדכון המאגר
+REPO_PATH="/home/ec2-user/app"
+echo "Updating repository..."
+cd "$REPO_PATH"
+
+# שמירת שינויים מקומיים (אם יש)
+git stash
+
+# ניסיון לעדכן את המאגר
+if git pull --rebase --autostash origin main; then
+    echo "Repository updated successfully."
+else
+    echo "Failed to update repository. Resetting to origin/main..."
+    git fetch origin
+    git reset --hard origin/main
+    git clean -fd
+fi
+
+# התקנת תלויות ועדכון האפליקציה
+npm install
+pm2 restart all || pm2 start app.js
+
+echo "Repository update process completed."
+
+# המשך התהליך המקורי של עדכון ה-ASG
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 
 # Check if Launch Template exists
@@ -92,5 +115,4 @@ if [ "$TARGET_HEALTH" != "healthy" ]; then
 fi
 
 echo "New instance is healthy in ALB."
-
 echo "ASG update process completed successfully!"
