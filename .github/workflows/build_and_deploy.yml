@@ -30,7 +30,7 @@ env:
   SSH_PACKER_PUB: ${{ secrets.SSH_PACKER_PUB }}
   DEFAULT_AMI_NAME: "al2023-ami-2023.4.20240528.0-kernel-6.1-x86_64"
   DEFAULT_AMI_OWNER: "659248058490"
-   AMI_ID: ami-02bd14a7de0ef4613
+  AMI_ID: ami-02bd14a7de0ef4613
 
 jobs:
   build-artifact:
