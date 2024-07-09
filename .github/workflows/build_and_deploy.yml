@@ -38,7 +38,6 @@ jobs:
   compile-backend:
     name: Compile Backend
     runs-on: ubuntu-latest
-    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
     steps:
       - name: Checkout Backend Repository
         uses: actions/checkout@v4
@@ -54,7 +53,8 @@ jobs:
           cache: 'maven'
       
       - name: Build with Maven
-  run: mvn clean package -Dmaven.compiler.source=17 -Dmaven.compiler.target=17 -Djava.version=17
+        run: |
+          mvn clean package -Dmaven.compiler.source=17 -Dmaven.compiler.target=17 -Djava.version=17
       
       - name: Upload compiled JAR
         uses: actions/upload-artifact@v2
