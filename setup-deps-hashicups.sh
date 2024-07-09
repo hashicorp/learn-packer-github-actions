@@ -1,81 +1,63 @@
 #!/bin/bash
 
-sleep 30
 set -e
-echo "Starting installation script..."
+echo "Starting Packer setup script..."
 
 # Update and upgrade system packages
 echo "Updating system packages..."
 sudo yum update -y
 
-# Install required packages
-echo "Installing required packages..."
-sudo yum install -y git wget ruby
-
-# Install Node.js and npm
-echo "Installing Node.js and npm..."
-curl -sL https://rpm.nodesource.com/setup_18.x | sudo bash -
-sudo yum install -y nodejs
-
-# Install PM2 globally
-echo "Installing PM2 globally..."
-sudo npm install -g pm2
+# Install Java 17
+echo "Installing Java 17..."
+sudo amazon-linux-extras install java-openjdk17 -y
 
 # Define variables
-GITHUB_USER="dvirmoyal"
-GITHUB_REPO="Frontend"
-GITHUB_BRANCH="develop"
 APP_DIR="/home/ec2-user/app"
+ARTIFACT_DIR="/tmp/artifacts"  # This should match Packer's configuration
+JAR_NAME=$(ls ${ARTIFACT_DIR}/*.jar | head -1)  # This will get the name of the first JAR file in the artifacts directory
 
-# Ensure SSH agent is running and add the key
-eval $(ssh-agent -s)
-ssh-add /home/ec2-user/.ssh/id_ed25519
+# Ensure app directory exists
+sudo mkdir -p ${APP_DIR}
 
-# Set up SSH config to use the correct key for GitHub
-mkdir -p ~/.ssh
-echo "Host github.com
-    IdentityFile /home/ec2-user/.ssh/id_ed25519
-    IdentitiesOnly yes
-    StrictHostKeyChecking no" > ~/.ssh/config
+# Copy the JAR file from the artifact directory to the app directory
+echo "Copying JAR file to application directory..."
+sudo cp ${JAR_NAME} ${APP_DIR}/
 
-# Ensure correct permissions on SSH files
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/config
-chmod 600 /home/ec2-user/.ssh/id_ed25519
+# Get just the filename of the JAR
+JAR_FILENAME=$(basename ${JAR_NAME})
 
-# Clone the specific branch from GitHub
-echo "Cloning the repository..."
-git clone -b ${GITHUB_BRANCH} git@github.com:${GITHUB_USER}/${GITHUB_REPO}.git ${APP_DIR}
-
-# Check if clone was successful
-if [ $? -eq 0 ]; then
-    echo "Repository cloned successfully."
-else
-    echo "Failed to clone repository. Please check your SSH key and GitHub access."
-    exit 1
-fi
-
-# Change directory to the app
-cd ${APP_DIR}
-
-# Install app dependencies
-echo "Installing app dependencies..."
-npm install
-
-# Build the app
-echo "Building the app..."
-npm run build
+# Ensure correct permissions
+sudo chown ec2-user:ec2-user ${APP_DIR}/${JAR_FILENAME}
+sudo chmod 644 ${APP_DIR}/${JAR_FILENAME}
 
 # Create a startup script
-cat << EOF > /home/ec2-user/start_app.sh
+echo "Creating startup script..."
+cat << EOF | sudo tee /home/ec2-user/start_app.sh
 #!/bin/bash
 cd ${APP_DIR}
-pm2 start npm --name "heshbonaitplus" -- start
+java -jar ${JAR_FILENAME}
 EOF
 
-chmod +x /home/ec2-user/start_app.sh
+sudo chmod +x /home/ec2-user/start_app.sh
 
-# Add the startup script to crontab
-echo "@reboot ec2-user /home/ec2-user/start_app.sh" | sudo tee -a /etc/crontab
+# Set up the application to start on boot using systemd
+echo "Setting up systemd service..."
+cat << EOF | sudo tee /etc/systemd/system/myapp.service
+[Unit]
+Description=My Java Application
+After=network.target
 
-echo "Installation script completed."
+[Service]
+ExecStart=/home/ec2-user/start_app.sh
+User=ec2-user
+WorkingDirectory=${APP_DIR}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service
+sudo systemctl enable myapp.service
+
+echo "Packer setup completed successfully."

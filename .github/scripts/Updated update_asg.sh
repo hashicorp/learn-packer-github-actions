@@ -9,7 +9,7 @@ LAUNCH_TEMPLATE_NAME=$3
 
 # הגדרת משתנים לתיקיית האפליקציה ו-URL של המאגר
 REPO_PATH="/home/ec2-user/app"
-REPO_URL="https://github.com/dvirmoyal/learn-packer-github-actions.git"
+REPO_URL="https://github.com/dvirmoyal/Frontend.git"
 
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 

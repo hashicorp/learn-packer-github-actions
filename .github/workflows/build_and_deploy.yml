@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build, Deploy, and Update ASG
 on:
   push:
     tags: ["v[0-9]+\\.[0-9]+\\.[0-9]+"]
@@ -31,10 +31,40 @@ env:
   DEFAULT_AMI_NAME: "al2023-ami-2023.4.20240528.0-kernel-6.1-x86_64"
   DEFAULT_AMI_OWNER: "659248058490"
   AMI_ID: ami-02bd14a7de0ef4613
+  JAVA_VERSION: '17'
+  BACKEND_REPO: 'dvirmoyal/Backend'
 
 jobs:
+  compile-backend:
+    name: Compile Backend
+    runs-on: ubuntu-latest
+    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
+    steps:
+      - name: Checkout Backend Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BACKEND_REPO }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+      
+      - name: Set up JDK and Maven
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'adopt'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package
+      
+      - name: Upload compiled JAR
+        uses: actions/upload-artifact@v2
+        with:
+          name: compiled-backend
+          path: target/*.jar
+
   build-artifact:
-    name: Build
+    name: Build AMI
+    needs: compile-backend
     runs-on: ubuntu-latest
     outputs:
       version_fingerprint: ${{ steps.hcp.outputs.version_fingerprint }}
@@ -49,21 +79,19 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1 
+      - name: Download compiled JAR
+        uses: actions/download-artifact@v2
+        with:
+          name: compiled-backend
+          path: ./backend-jar
       - name: Packer Init
         run: packer init .
-      - name: Packer Build - Branches
-        if: startsWith(github.ref, 'refs/heads/')
+      - name: Packer Build
         run: |
           packer build \
             -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
             -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
-            .
-      - name: Packer Build - Tags
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          HCP_PACKER_BUILD_FINGERPRINT=$(date +'%m%d%YT%H%M%S') packer build \
-            -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
-            -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
+            -var "COMPILED_JAR_PATH=./backend-jar" \
             .
       - name: Get HCP Packer version fingerprint from Packer Manifest
         id: hcp
@@ -95,9 +123,8 @@ jobs:
           channel_name=$(echo "${{ github.ref_name }}" | sed 's/\\./-/g')
           ./create_channel_version.sh "$HCP_BUCKET_NAME" "$channel_name" "${{ needs.build-artifact.outputs.version_fingerprint }}"
 
-
   update-asg:
-    name: Update Frontend Auto Scaling Group
+    name: Update Auto Scaling Group
     needs: build-artifact
     if: always()
     runs-on: ubuntu-latest
@@ -130,8 +157,8 @@ jobs:
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
       - name: Update and Refresh ASG
         env:
-          FRONTEND_ASG_NAME: scaling-group-dev-frontend
-          LAUNCH_TEMPLATE_NAME: templete-for-heshbonaitplus-fontend
+          FRONTEND_ASG_NAME: AUTO-SCALING-DEV-BACKEND
+          LAUNCH_TEMPLATE_NAME: templete-dev-backend
         run: |
           chmod +x .github/scripts/Updated\ update_asg.sh
           .github/scripts/Updated\ update_asg.sh "${{ steps.get_ami.outputs.ami_id }}" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"

@@ -9,14 +9,19 @@ packer {
 
 variable "SSH_PACKER" {
   type        = string
-  description = "SSH private key content"
+  description = "תוכן מפתח SSH פרטי"
   default     = ""
 }
 
 variable "SSH_PACKER_PUB" {
   type        = string
-  description = "SSH public key content"
+  description = "תוכן מפתח SSH ציבורי"
   default     = ""
+}
+
+variable "COMPILED_JAR_PATH" {
+  type        = string
+  description = "נתיב לקובץ ה-JAR המקומפל מ-GitHub Actions"
 }
 
 source "amazon-ebs" "ubuntu-lts" {
@@ -33,7 +38,7 @@ source "amazon-ebs" "ubuntu-lts" {
   instance_type  = "t3.micro"
   ssh_username   = "ec2-user"
   ssh_agent_auth = false
-  ami_name       = "hashicups_{{timestamp}}"
+  ami_name       = "java-app-ami-{{timestamp}}"
   ami_regions    = ["il-central-1"]
 }
 
@@ -41,7 +46,7 @@ build {
   hcp_packer_registry {
     bucket_name = "learn-packer-github-actions"
     description = <<EOT
-This is an image for HashiCups.
+זוהי תמונה עבור אפליקציית Java.
     EOT
     bucket_labels = {
       "hashicorp-learn" = "learn-packer-github-actions",
@@ -52,30 +57,13 @@ This is an image for HashiCups.
     "source.amazon-ebs.ubuntu-lts",
   ]
   
-  provisioner "shell" {
-    environment_vars = [
-      "SSH_PACKER=${var.SSH_PACKER}",
-      "SSH_PACKER_PUB=${var.SSH_PACKER_PUB}"
-    ]
-    inline = [
-      "echo \"$SSH_PACKER\" > /tmp/id_ed25519",
-      "echo \"$SSH_PACKER_PUB\" > /tmp/id_ed25519.pub",
-      "chmod 600 /tmp/id_ed25519",
-      "chmod 644 /tmp/id_ed25519.pub",
-      "mkdir -p /home/ec2-user/.ssh",
-      "mv /tmp/id_ed25519 /home/ec2-user/.ssh/",
-      "mv /tmp/id_ed25519.pub /home/ec2-user/.ssh/",
-      "chown ec2-user:ec2-user /home/ec2-user/.ssh/id_ed25519*"
-    ]
-  }
-  
   provisioner "file" {
-    source      = "hashicups.service"
-    destination = "/tmp/hashicups.service"
+    source      = var.COMPILED_JAR_PATH
+    destination = "/tmp/artifacts/"
   }
   
   provisioner "shell" {
-    script = "setup-deps-hashicups.sh"
+    script = "setup-java-app.sh"
   }
   
   post-processor "manifest" {
