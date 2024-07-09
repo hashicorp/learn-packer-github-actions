@@ -53,8 +53,8 @@ jobs:
           cache: 'maven'
       
       - name: Build with Maven
-        run: |
-          mvn clean package -Dmaven.compiler.source=17 -Dmaven.compiler.target=17 -Djava.version=17
+  run: |
+    mvn clean package -Dmaven.compiler.source=17 -Dmaven.compiler.target=17 -Djava.version=17 -Dspring.jpa.hibernate.ddl-auto=none -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false
       
       - name: Upload compiled JAR
         uses: actions/upload-artifact@v2
