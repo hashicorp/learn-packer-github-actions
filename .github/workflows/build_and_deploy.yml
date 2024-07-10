@@ -77,7 +77,7 @@ jobs:
       version_fingerprint: ${{ steps.hcp.outputs.version_fingerprint }}
       ami_id: ${{ steps.ami.outputs.ami_id }}
     if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
-    steps:
+     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
       - name: Configure AWS Credentials
