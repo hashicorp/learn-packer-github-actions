@@ -62,17 +62,17 @@ jobs:
           -Dspring.jpa.hibernate.ddl-auto=none \
           -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false \
           -DskipTests
+      
       - name: Upload compiled JAR
-  uses: actions/upload-artifact@v2
-  with:
-    name: compiled-backend
-    - name: Upload compiled JAR
-  uses: actions/upload-artifact@v2
-  with:
-    name: compiled-backend
-    - name: Check uploaded artifact
-  run: |
-    echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
+        uses: actions/upload-artifact@v2
+        with:
+          name: compiled-backend
+          path: target/*.jar
+      
+      - name: Check uploaded artifact
+        run: |
+          echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
+
   build-artifact:
     name: Build AMI
     needs: compile-backend
@@ -84,17 +84,20 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
+      
       - name: Download compiled JAR
         uses: actions/download-artifact@v2
         with:
           name: compiled-backend
           path: ./backend-jar
+      
       - name: Packer Init
         run: packer init .
 
@@ -111,6 +114,7 @@ jobs:
             --query 'LaunchTemplateVersions[0].LaunchTemplateData.ImageId' \
             --output text)
           echo "LATEST_AMI=$LATEST_AMI" >> $GITHUB_ENV
+      
       - name: Packer Build
         run: |
           packer build \
@@ -120,21 +124,20 @@ jobs:
             -var "source_ami=${{ env.LATEST_AMI }}" \
             .
           echo "PACKER_AMI_ID=$(jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d':' -f2)" >> $GITHUB_ENV
-
-       - name: Check backend-jar content
-  run: |
-    echo "Contents of ./backend-jar:"
-    ls -l ./backend-jar
       
-     
-  
       - name: Check backend-jar content
-  run: |
-    echo "Contents of ./backend-jar:"
-    ls -l ./backend-jar
+        run: |
+          echo "Contents of ./backend-jar:"
+          ls -l ./backend-jar
+      
+      - name: Get HCP Packer version fingerprint from Packer Manifest
+        id: hcp
+        run: |
+          last_run_uuid=$(jq -r '.last_run_uuid' "./packer_manifest.json")
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           version_fingerprint=$(echo "$build" | jq -r '.custom_data.version_fingerprint')
           echo "version_fingerprint=$version_fingerprint" >> $GITHUB_OUTPUT
+      
       - name: Get AMI ID from Packer Manifest
         id: ami
         run: |
@@ -143,22 +146,23 @@ jobs:
           ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
           echo "AMI ID from Packer build: $ami_id"
-
+      
       - name: Check AMI content
-  run: |
-    INSTANCE_ID=$(aws ec2 run-instances --image-id $AMI_ID --instance-type t2.micro --count 1 --query 'Instances[0].InstanceId' --output text)
-    aws ec2 wait instance-running --instance-ids $INSTANCE_ID
-    aws ssm send-command --instance-ids $INSTANCE_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
-    aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances --image-id $AMI_ID --instance-type t2.micro --count 1 --query 'Instances[0].InstanceId' --output text)
+          aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+          aws ssm send-command --instance-ids $INSTANCE_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
+          aws ec2 terminate-instances --instance-ids $INSTANCE_ID
 
   update-hcp-packer-channel:
-    - name: Check AMI content
-  run: |
-    INSTANCE_ID=$(aws ec2 run-instances --image-id $AMI_ID --instance-type t2.micro --count 1 --query 'Instances[0].InstanceId' --output text)
-    aws ec2 wait instance-running --instance-ids $INSTANCE_ID
-    aws ssm send-command --instance-ids $INSTANCE_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
-    aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+    name: Update HCP Packer channel
+    needs: build-artifact
+    runs-on: ubuntu-latest
+    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
+      
       - name: Create and set channel
         working-directory: .github/scripts
         run: |
@@ -173,12 +177,14 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
+      
       - name: Update and Refresh ASG
         env:
           FRONTEND_ASG_NAME: AUTO-SCALING-DEV-BACKEND
