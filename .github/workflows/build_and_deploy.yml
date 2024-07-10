@@ -66,12 +66,13 @@ jobs:
   uses: actions/upload-artifact@v2
   with:
     name: compiled-backend
-    path: target/*.jar
-
-- name: Check uploaded artifact
+    - name: Upload compiled JAR
+  uses: actions/upload-artifact@v2
+  with:
+    name: compiled-backend
+    - name: Check uploaded artifact
   run: |
     echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
-
   build-artifact:
     name: Build AMI
     needs: compile-backend
@@ -127,10 +128,10 @@ jobs:
       
      
   
-      - name: Get HCP Packer version fingerprint from Packer Manifest
-        id: hcp
-        run: |
-          last_run_uuid=$(jq -r '.last_run_uuid' "./packer_manifest.json")
+      - name: Check backend-jar content
+  run: |
+    echo "Contents of ./backend-jar:"
+    ls -l ./backend-jar
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           version_fingerprint=$(echo "$build" | jq -r '.custom_data.version_fingerprint')
           echo "version_fingerprint=$version_fingerprint" >> $GITHUB_OUTPUT
@@ -151,12 +152,12 @@ jobs:
     aws ec2 terminate-instances --instance-ids $INSTANCE_ID
 
   update-hcp-packer-channel:
-    name: Update HCP Packer channel
-    needs: build-artifact
-    runs-on: ubuntu-latest
-    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
-    steps:
-      - name: Checkout Repository
+    - name: Check AMI content
+  run: |
+    INSTANCE_ID=$(aws ec2 run-instances --image-id $AMI_ID --instance-type t2.micro --count 1 --query 'Instances[0].InstanceId' --output text)
+    aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+    aws ssm send-command --instance-ids $INSTANCE_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
+    aws ec2 terminate-instances --instance-ids $INSTANCE_ID
         uses: actions/checkout@v4
       - name: Create and set channel
         working-directory: .github/scripts
