@@ -169,5 +169,5 @@ jobs:
           NEW_AMI_ID: ${{ needs.build-artifact.outputs.ami_id }}
         run: |
           echo "Using new AMI ID: $NEW_AMI_ID"
-          chmod +x ".github/scripts/update_asg.sh"
+          chmod +x ".github/scripts/Updated update_asg.sh"
           ".github/scripts/update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
