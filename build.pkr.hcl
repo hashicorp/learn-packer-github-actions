@@ -24,22 +24,19 @@ variable "COMPILED_JAR_PATH" {
   description = "נתיב לקובץ ה-JAR המקומפל מ-GitHub Actions"
 }
 
+variable "source_ami" {
+  type        = string
+  description = "AMI ID to use as a base"
+}
+
 source "amazon-ebs" "ubuntu-lts" {
-  region = "il-central-1"
-  source_ami_filter {
-    filters = {
-      virtualization-type = "hvm"
-      name                = "al2023-ami-2023.4.20240528.0-kernel-6.1-x86_64"
-      root-device-type    = "ebs"
-    }
-    owners      = ["659248058490"]
-    most_recent = true
-  }
-  instance_type  = "t3.micro"
-  ssh_username   = "ec2-user"
-  ssh_agent_auth = false
-  ami_name       = "java-app-ami-{{timestamp}}"
-  ami_regions    = ["il-central-1"]
+  region          = "il-central-1"
+  source_ami      = var.source_ami
+  instance_type   = "t3.micro"
+  ssh_username    = "ec2-user"
+  ssh_agent_auth  = false
+  ami_name        = "java-app-ami-{{timestamp}}"
+  ami_regions     = ["il-central-1"]
 }
 
 build {
@@ -63,7 +60,7 @@ build {
   }
   
   provisioner "shell" {
-    script = "setup-java-app.sh"
+    script = "setup-deps-hashicups.sh"
   }
   
   post-processor "manifest" {

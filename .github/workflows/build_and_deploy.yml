@@ -33,6 +33,7 @@ env:
   AMI_ID: ami-02bd14a7de0ef4613
   JAVA_VERSION: '17'
   BACKEND_REPO: 'dvirmoyal/Backend'
+  LAUNCH_TEMPLATE_NAME: templete-dev-backend
 
 jobs:
   compile-backend:
@@ -92,12 +93,28 @@ jobs:
           path: ./backend-jar
       - name: Packer Init
         run: packer init .
+
+      - name: Get latest AMI from Launch Template
+        run: |
+          LATEST_LT_VERSION=$(aws ec2 describe-launch-template-versions \
+            --launch-template-name "${{ env.LAUNCH_TEMPLATE_NAME }}" \
+            --versions '$Latest' \
+            --query 'LaunchTemplateVersions[0].VersionNumber' \
+            --output text)
+          LATEST_AMI=$(aws ec2 describe-launch-template-versions \
+            --launch-template-name "${{ env.LAUNCH_TEMPLATE_NAME }}" \
+            --versions $LATEST_LT_VERSION \
+            --query 'LaunchTemplateVersions[0].LaunchTemplateData.ImageId' \
+            --output text)
+          echo "LATEST_AMI=$LATEST_AMI" >> $GITHUB_ENV
+
       - name: Packer Build
         run: |
           packer build \
             -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
             -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
             -var "COMPILED_JAR_PATH=./backend-jar" \
+            -var "source_ami=${{ env.LATEST_AMI }}" \
             .
       - name: Get HCP Packer version fingerprint from Packer Manifest
         id: hcp
