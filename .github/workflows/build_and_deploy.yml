@@ -155,13 +155,7 @@ jobs:
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
           echo "AMI ID from Packer build: $ami_id"
       
-      - name: Check AMI content
-        run: |
-         INSTANCE_ID=$(aws ec2 run-instances --image-id $AMI_ID --instance-type t3.micro --count 1 --query 'Instances[0].InstanceId' --output text)
-         echo "Created Instance ID: $INSTANCE_ID"
-         aws ec2 wait instance-running --instance-ids $INSTANCE_ID
-         aws ssm send-command --instance-ids $INSTANCE_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
-         aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+      
 
   update-hcp-packer-channel:
     name: Update HCP Packer channel
