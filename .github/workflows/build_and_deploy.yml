@@ -116,9 +116,8 @@ jobs:
             .
           echo "PACKER_AMI_ID=$(jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d':' -f2)" >> $GITHUB_ENV
       
-      - name: Debug - Print New AMI ID
-        run: echo "New AMI ID created by Packer: ${{ env.PACKER_AMI_ID }}"
-      
+     
+  
       - name: Get HCP Packer version fingerprint from Packer Manifest
         id: hcp
         run: |
