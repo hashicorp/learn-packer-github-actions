@@ -125,13 +125,13 @@ jobs:
           echo "LATEST_AMI=$LATEST_AMI" >> $GITHUB_ENV
       
       - name: Packer Build
-  run: |
-    packer build \
-      -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
-      -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
-      -var "COMPILED_JAR_PATH=./backend-jar" \
-      -var "source_ami=${{ env.LATEST_AMI }}" \
-      .
+        run: |
+          packer build \
+            -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
+            -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
+            -var "COMPILED_JAR_PATH=./backend-jar" \
+            -var "source_ami=${{ env.LATEST_AMI }}" \
+            .
       
       - name: Check backend-jar content
         run: |
