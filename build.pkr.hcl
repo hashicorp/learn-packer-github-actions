@@ -24,6 +24,7 @@ variable "COMPILED_JAR_PATH" {
   description = "נתיב לקובץ ה-JAR המקומפל מ-GitHub Actions"
 }
 
+
 variable "source_ami" {
   type        = string
   description = "AMI ID to use as a base"
@@ -54,21 +55,22 @@ build {
     "source.amazon-ebs.ubuntu-lts",
   ]
   
-  provisioner "shell" {
-    inline = [
-      "echo 'Contents of ${var.COMPILED_JAR_PATH}:'",
-      "ls -l ${var.COMPILED_JAR_PATH}"
-    ]
-  }
-
   provisioner "file" {
   source      = "${var.COMPILED_JAR_PATH}"
   destination = "/tmp/artifacts/"
 }
-  
-  provisioner "shell" {
-    script = "setup-deps-hashicups.sh"
-  }
+
+provisioner "shell" {
+  inline = [
+    "ls -l /tmp/artifacts/",
+    "echo 'Contents of /tmp/artifacts:'",
+    "find /tmp/artifacts -type f -name '*.jar'"
+  ]
+}
+
+provisioner "shell" {
+  script = "setup-deps-hashicups.sh"
+}
   
   post-processor "manifest" {
     output     = "packer_manifest.json"

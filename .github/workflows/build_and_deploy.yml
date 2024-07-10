@@ -125,14 +125,13 @@ jobs:
           echo "LATEST_AMI=$LATEST_AMI" >> $GITHUB_ENV
       
       - name: Packer Build
-        run: |
-          packer build \
-            -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
-            -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
-            -var "COMPILED_JAR_PATH=./backend-jar/HeshbonaitPlus-0.0.1-SNAPSHOT.jar" \
-            -var "source_ami=${{ env.LATEST_AMI }}" \
-            .
-          echo "PACKER_AMI_ID=$(jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d':' -f2)" >> $GITHUB_ENV
+  run: |
+    packer build \
+      -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
+      -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
+      -var "COMPILED_JAR_PATH=./backend-jar" \
+      -var "source_ami=${{ env.LATEST_AMI }}" \
+      .
       
       - name: Check backend-jar content
         run: |
