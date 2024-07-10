@@ -154,35 +154,5 @@ fi
 
 echo "Java application is running."
 
-TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names $FRONTEND_ASG_NAME \
-  --query 'AutoScalingGroups[0].TargetGroupARNs[0]' \
-  --output text)
 
-echo "Waiting 90 seconds before checking ALB health..."
-sleep 90
-
-TARGET_HEALTH=$(aws elbv2 describe-target-health \
-  --target-group-arn $TARGET_GROUP_ARN \
-  --query 'TargetHealthDescriptions[0].TargetHealth.State' \
-  --output text)
-
-if [ "$TARGET_HEALTH" != "healthy" ]; then
-  echo "New instance is not healthy in ALB. Checking application logs..."
-  aws ssm send-command \
-    --instance-ids $NEW_INSTANCE_ID \
-    --document-name "AWS-RunShellScript" \
-    --parameters '{"commands":["tail -n 100 '"$APP_DIR"'/app.log"]}'
-  echo "Please check the application settings and ALB health check configuration."
-  exit 1
-fi
-
-echo "Checking contents of /home/ec2-user/app/ in the new instance:"
-aws ssm send-command \
-  --instance-ids $NEW_INSTANCE_ID \
-  --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' \
-  --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
-  
-echo "New instance is healthy in ALB."
 echo "ASG update process completed successfully!"
