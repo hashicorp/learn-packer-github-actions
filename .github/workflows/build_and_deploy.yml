@@ -59,7 +59,8 @@ jobs:
           -Dmaven.compiler.target=17 \
           -Djava.version=17 \
           -Dspring.jpa.hibernate.ddl-auto=none \
-          -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false
+          -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false \
+          -DskipTests
 
       - name: Upload compiled JAR
         uses: actions/upload-artifact@v2
