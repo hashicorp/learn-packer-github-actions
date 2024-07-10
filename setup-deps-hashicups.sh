@@ -16,8 +16,8 @@ sudo dnf install -y java-17-amazon-corretto
 
 # Define variables
 APP_DIR="/home/ec2-user/app"
-ARTIFACT_DIR="/tmp/artifacts"  # This should match Packer's configuration
-JAR_NAME=$(ls ${ARTIFACT_DIR}/*.jar | head -1)  # This will get the name of the first JAR file in the artifacts directory
+ARTIFACT_DIR="/tmp/artifacts"
+JAR_NAME="HeshbonaitPlus-0.0.1-SNAPSHOT.jar"
 
 echo "Contents of ${ARTIFACT_DIR}:"
 ls -l ${ARTIFACT_DIR}
