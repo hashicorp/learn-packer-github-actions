@@ -170,4 +170,4 @@ jobs:
         run: |
           echo "Using new AMI ID: $NEW_AMI_ID"
           chmod +x ".github/scripts/Updated update_asg.sh"
-          ".github/scripts/update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
+          ".github/scripts/Updated update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
