@@ -93,18 +93,19 @@ jobs:
           aws-region: il-central-1
       
       - name: Download compiled JAR
-  uses: actions/download-artifact@v2
-  with:
-    name: compiled-backend
-    path: ./backend-jar
-- name: Check backend-jar content
-  run: |
-    echo "Current directory:"
-    pwd
-    echo "Contents of current directory:"
-    ls -la
-    echo "Contents of ./backend-jar:"
-    ls -la ./backend-jar
+        uses: actions/download-artifact@v2
+        with:
+          name: compiled-backend
+          path: ./backend-jar
+
+      - name: Check backend-jar content
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of ./backend-jar:"
+          ls -la ./backend-jar
       
       - name: Packer Init
         run: packer init .
@@ -128,7 +129,7 @@ jobs:
           packer build \
             -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
             -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
-            -var "COMPILED_JAR_PATH=./backend-jar/HeshbonaitPlus-0.0.1-SNAPSHOT.jar"
+            -var "COMPILED_JAR_PATH=./backend-jar/HeshbonaitPlus-0.0.1-SNAPSHOT.jar" \
             -var "source_ami=${{ env.LATEST_AMI }}" \
             .
           echo "PACKER_AMI_ID=$(jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d':' -f2)" >> $GITHUB_ENV
@@ -194,16 +195,16 @@ jobs:
           aws-region: il-central-1
       
       - name: Update and Refresh ASG
-  env:
-    FRONTEND_ASG_NAME: AUTO-SCALING-DEV-BACKEND
-    LAUNCH_TEMPLATE_NAME: templete-dev-backend
-    NEW_AMI_ID: ${{ needs.build-artifact.outputs.ami_id }}
-  run: |
-    echo "NEW_AMI_ID: $NEW_AMI_ID"
-    if [ -z "$NEW_AMI_ID" ]; then
-      echo "Error: NEW_AMI_ID is empty"
-      exit 1
-    fi
-    echo "Using new AMI ID: $NEW_AMI_ID"
-    chmod +x ".github/scripts/Updated update_asg.sh"
-    ".github/scripts/Updated update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
+        env:
+          FRONTEND_ASG_NAME: AUTO-SCALING-DEV-BACKEND
+          LAUNCH_TEMPLATE_NAME: templete-dev-backend
+          NEW_AMI_ID: ${{ needs.build-artifact.outputs.ami_id }}
+        run: |
+          echo "NEW_AMI_ID: $NEW_AMI_ID"
+          if [ -z "$NEW_AMI_ID" ]; then
+            echo "Error: NEW_AMI_ID is empty"
+            exit 1
+          fi
+          echo "Using new AMI ID: $NEW_AMI_ID"
+          chmod +x ".github/scripts/Updated update_asg.sh"
+          ".github/scripts/Updated update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
