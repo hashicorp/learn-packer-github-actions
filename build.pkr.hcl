@@ -54,6 +54,13 @@ build {
     "source.amazon-ebs.ubuntu-lts",
   ]
   
+  provisioner "shell" {
+    inline = [
+      "echo 'Contents of ${var.COMPILED_JAR_PATH}:'",
+      "ls -l ${var.COMPILED_JAR_PATH}"
+    ]
+  }
+
   provisioner "file" {
   source      = var.COMPILED_JAR_PATH
   destination = "/tmp/artifacts/"

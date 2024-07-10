@@ -177,5 +177,12 @@ if [ "$TARGET_HEALTH" != "healthy" ]; then
   exit 1
 fi
 
+echo "Checking contents of /home/ec2-user/app/ in the new instance:"
+aws ssm send-command \
+  --instance-ids $NEW_INSTANCE_ID \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' \
+  --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
+  
 echo "New instance is healthy in ALB."
 echo "ASG update process completed successfully!"

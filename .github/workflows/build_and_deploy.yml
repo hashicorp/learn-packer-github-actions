@@ -63,10 +63,14 @@ jobs:
           -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false \
           -DskipTests
       - name: Upload compiled JAR
-        uses: actions/upload-artifact@v2
-        with:
-          name: compiled-backend
-          path: target/*.jar
+  uses: actions/upload-artifact@v2
+  with:
+    name: compiled-backend
+    path: target/*.jar
+
+- name: Check uploaded artifact
+  run: |
+    echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
 
   build-artifact:
     name: Build AMI
@@ -115,6 +119,11 @@ jobs:
             -var "source_ami=${{ env.LATEST_AMI }}" \
             .
           echo "PACKER_AMI_ID=$(jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d':' -f2)" >> $GITHUB_ENV
+
+       - name: Check backend-jar content
+  run: |
+    echo "Contents of ./backend-jar:"
+    ls -l ./backend-jar
       
      
   
@@ -133,6 +142,13 @@ jobs:
           ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
           echo "AMI ID from Packer build: $ami_id"
+
+      - name: Check AMI content
+  run: |
+    INSTANCE_ID=$(aws ec2 run-instances --image-id $AMI_ID --instance-type t2.micro --count 1 --query 'Instances[0].InstanceId' --output text)
+    aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+    aws ssm send-command --instance-ids $INSTANCE_ID --document-name "AWS-RunShellScript" --parameters '{"commands":["ls -l /home/ec2-user/app/"]}' --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
+    aws ec2 terminate-instances --instance-ids $INSTANCE_ID
 
   update-hcp-packer-channel:
     name: Update HCP Packer channel

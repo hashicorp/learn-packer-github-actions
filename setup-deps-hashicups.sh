@@ -3,6 +3,9 @@
 set -e
 echo "Starting Packer setup script..."
 
+echo "Contents of /tmp/artifacts/:"
+ls -l /tmp/artifacts/
+
 # Update and upgrade system packages
 echo "Updating system packages..."
 sudo yum update -y
@@ -26,6 +29,9 @@ sudo mkdir -p ${APP_DIR}
 # Copy the JAR file from the artifact directory to the app directory
 echo "Copying JAR file to application directory..."
 sudo cp ${JAR_NAME} ${APP_DIR}/
+echo "Contents of ${APP_DIR} after copy:"
+ls -l ${APP_DIR}
+
 echo "Contents of ${APP_DIR} after copy:"
 ls -l ${APP_DIR}
 
@@ -62,6 +68,9 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF
+
+echo "Final contents of ${APP_DIR}:"
+ls -l ${APP_DIR}
 
 # Enable the service
 sudo systemctl enable myapp.service
