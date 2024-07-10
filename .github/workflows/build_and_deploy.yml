@@ -108,6 +108,17 @@ jobs:
             --output text)
           echo "LATEST_AMI=$LATEST_AMI" >> $GITHUB_ENV
 
+       name: Packer Build
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
       - name: Packer Build
         run: |
           packer build \
@@ -117,9 +128,10 @@ jobs:
             -var "source_ami=${{ env.LATEST_AMI }}" \
             .
           echo "PACKER_AMI_ID=$(jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d':' -f2)" >> $GITHUB_ENV
-
+      
       - name: Debug - Print New AMI ID
         run: echo "New AMI ID created by Packer: ${{ env.PACKER_AMI_ID }}"
+
       - name: Get HCP Packer version fingerprint from Packer Manifest
         id: hcp
         run: |
@@ -127,6 +139,7 @@ jobs:
           build=$(jq -r '.builds[] | select(.packer_run_uuid == "'"$last_run_uuid"'")' "./packer_manifest.json")
           version_fingerprint=$(echo "$build" | jq -r '.custom_data.version_fingerprint')
           echo "version_fingerprint=$version_fingerprint" >> $GITHUB_OUTPUT
+
       - name: Get AMI ID from Packer Manifest
         id: ami
         run: |
@@ -138,38 +151,41 @@ jobs:
 
   update-hcp-packer-channel:
     name: Update HCP Packer channel
-    needs: build-artifact
+    needs: build
     runs-on: ubuntu-latest
     if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
+
       - name: Create and set channel
         working-directory: .github/scripts
         run: |
           channel_name=$(echo "${{ github.ref_name }}" | sed 's/\\./-/g')
-          ./create_channel_version.sh "$HCP_BUCKET_NAME" "$channel_name" "${{ needs.build-artifact.outputs.version_fingerprint }}"
+          ./create_channel_version.sh "$HCP_BUCKET_NAME" "$channel_name" "${{ needs.build.outputs.version_fingerprint }}"
 
   update-asg:
-  name: Update Auto Scaling Group
-  needs: build-artifact
-  if: always()
-  runs-on: ubuntu-latest
-  steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: il-central-1
-    - name: Update and Refresh ASG
-  env:
-    FRONTEND_ASG_NAME: AUTO-SCALING-DEV-BACKEND
-    LAUNCH_TEMPLATE_NAME: templete-dev-backend
-    NEW_AMI_ID: ${{ needs.build-artifact.outputs.ami_id }}
-  run: |
-    echo "Using new AMI ID: $NEW_AMI_ID"
-    chmod +x ".github/scripts/Updated update_asg.sh"
-    ".github/scripts/Updated update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
+    name: Update Auto Scaling Group
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: il-central-1
+
+      - name: Update and Refresh ASG
+        env:
+          FRONTEND_ASG_NAME: AUTO-SCALING-DEV-BACKEND
+          LAUNCH_TEMPLATE_NAME: template-dev-backend
+          NEW_AMI_ID: ${{ needs.build.outputs.ami_id }}
+        run: |
+          echo "Using new AMI ID: $NEW_AMI_ID"
+          chmod +x ".github/scripts/update_asg.sh"
+          ".github/scripts/update_asg.sh" "$NEW_AMI_ID" "$FRONTEND_ASG_NAME" "$LAUNCH_TEMPLATE_NAME"
