@@ -7,9 +7,11 @@ AMI_ID=$1
 FRONTEND_ASG_NAME=$2
 LAUNCH_TEMPLATE_NAME=$3
 
-# הגדרת משתנים לתיקיית האפליקציה ו-URL של המאגר
-REPO_PATH="/home/ec2-user/app"
-REPO_URL="https://github.com/dvirmoyal/Frontend.git"
+# Define variables for the Java application
+APP_DIR="/home/ec2-user/app"
+JAR_FILE=$(ls $APP_DIR/*.jar | head -n 1)  # Assumes the JAR file is in the app directory
+JAVA_VERSION="17"
+JAVA_OPTS="-Xmx512m -Dspring.profiles.active=production -Dspring.jpa.hibernate.ddl-auto=none -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false"
 
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 
@@ -87,55 +89,41 @@ echo "New instance ID: $NEW_INSTANCE_ID"
 echo "Waiting for instance to be fully initialized..."
 aws ec2 wait instance-status-ok --instance-ids $NEW_INSTANCE_ID
 
-echo "Updating and starting application on the new instance..."
+echo "Starting Java application on the new instance..."
 aws ssm send-command \
   --instance-ids $NEW_INSTANCE_ID \
   --document-name "AWS-RunShellScript" \
   --parameters '{
     "commands":[
-      "cd /home/ec2-user/app",
-      "git pull",
-      "npm install",
-      "npm run build",
-      "pm2 delete heshbonaitplus || true",
-      "pm2 start npm --name \"heshbonaitplus\" -- start"
+      "cd '"$APP_DIR"'",
+      "JAR_FILE=$(ls *.jar | head -n 1)",
+      "nohup java -version '"$JAVA_VERSION"' '"$JAVA_OPTS"' -jar $JAR_FILE > app.log 2>&1 &",
+      "echo $! > app.pid"
     ]
   }'
 
 echo "Waiting 60 seconds for the application to start..."
 sleep 60
 
-
 # Check if the application is running
 echo "Checking if the application is running..."
 APP_STATUS=$(aws ssm send-command \
   --instance-ids $NEW_INSTANCE_ID \
   --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["pm2 list"]}' \
+  --parameters '{"commands":["ps aux | grep java | grep -v grep"]}' \
   --output text --query "CommandInvocations[0].CommandPlugins[0].Output")
 
-if [[ $APP_STATUS != *"online"* ]]; then
-  echo "Application is not running. Attempting to start..."
+if [[ -z "$APP_STATUS" ]]; then
+  echo "Java application is not running. Checking logs..."
   aws ssm send-command \
     --instance-ids $NEW_INSTANCE_ID \
     --document-name "AWS-RunShellScript" \
-    --parameters '{"commands":["cd '"$REPO_PATH"' && pm2 start app.js"]}'
-  
-  # Wait a bit and check again
-  sleep 30
-  APP_STATUS=$(aws ssm send-command \
-    --instance-ids $NEW_INSTANCE_ID \
-    --document-name "AWS-RunShellScript" \
-    --parameters '{"commands":["pm2 list"]}' \
-    --output text --query "CommandInvocations[0].CommandPlugins[0].Output")
-  
-  if [[ $APP_STATUS != *"online"* ]]; then
-    echo "Failed to start the application. Please check the instance manually."
-    exit 1
-  fi
+    --parameters '{"commands":["tail -n 50 '"$APP_DIR"'/app.log"]}'
+  echo "Failed to start the Java application. Please check the instance manually."
+  exit 1
 fi
 
-echo "Application is running."
+echo "Java application is running."
 
 TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
   --auto-scaling-group-names $FRONTEND_ASG_NAME \
@@ -151,7 +139,12 @@ TARGET_HEALTH=$(aws elbv2 describe-target-health \
   --output text)
 
 if [ "$TARGET_HEALTH" != "healthy" ]; then
-  echo "New instance is not healthy in ALB. Checking logs and application settings."
+  echo "New instance is not healthy in ALB. Checking application logs..."
+  aws ssm send-command \
+    --instance-ids $NEW_INSTANCE_ID \
+    --document-name "AWS-RunShellScript" \
+    --parameters '{"commands":["tail -n 100 '"$APP_DIR"'/app.log"]}'
+  echo "Please check the application settings and ALB health check configuration."
   exit 1
 fi
 

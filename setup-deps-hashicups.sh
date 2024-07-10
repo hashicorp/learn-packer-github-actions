@@ -9,7 +9,7 @@ sudo yum update -y
 
 # Install Java 17
 echo "Installing Java 17..."
-sudo amazon-linux-extras install java-openjdk17 -y
+sudo dnf install -y java-17-amazon-corretto
 
 # Define variables
 APP_DIR="/home/ec2-user/app"
