@@ -85,6 +85,20 @@ NEW_INSTANCE_ID=$(aws autoscaling describe-auto-scaling-groups \
 
 echo "New instance ID: $NEW_INSTANCE_ID"
 
+echo "Checking for JAR file..."
+JAR_CHECK=$(aws ssm send-command \
+  --instance-ids $NEW_INSTANCE_ID \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{"commands":["ls -l /home/ec2-user/app/*.jar"]}' \
+  --output text --query "CommandInvocations[0].CommandPlugins[0].Output")
+
+if [[ $JAR_CHECK == *"No such file or directory"* ]]; then
+  echo "JAR file not found in /home/ec2-user/app/. Please check your AMI and deployment process."
+  exit 1
+fi
+
+echo "JAR file found. Proceeding with application start..."
+
 # Wait for the instance to be fully initialized
 echo "Waiting for instance to be fully initialized..."
 aws ec2 wait instance-status-ok --instance-ids $NEW_INSTANCE_ID
@@ -104,6 +118,21 @@ aws ssm send-command \
 
 echo "Waiting 60 seconds for the application to start..."
 sleep 60
+
+echo "Checking for JAR file..."
+JAR_CHECK=$(aws ssm send-command \
+  --instance-ids $NEW_INSTANCE_ID \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{"commands":["ls -l /home/ec2-user/app/*.jar"]}' \
+  --output text --query "CommandInvocations[0].CommandPlugins[0].Output")
+
+if [[ $JAR_CHECK == *"No such file or directory"* ]]; then
+  echo "JAR file not found in /home/ec2-user/app/. Please check your AMI and deployment process."
+  exit 1
+fi
+
+echo "JAR file found. Proceeding with application start..."
+
 
 # Check if the application is running
 echo "Checking if the application is running..."

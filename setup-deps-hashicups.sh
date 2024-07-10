@@ -16,12 +16,18 @@ APP_DIR="/home/ec2-user/app"
 ARTIFACT_DIR="/tmp/artifacts"  # This should match Packer's configuration
 JAR_NAME=$(ls ${ARTIFACT_DIR}/*.jar | head -1)  # This will get the name of the first JAR file in the artifacts directory
 
+echo "Contents of ${ARTIFACT_DIR}:"
+ls -l ${ARTIFACT_DIR}
+
+
 # Ensure app directory exists
 sudo mkdir -p ${APP_DIR}
 
 # Copy the JAR file from the artifact directory to the app directory
 echo "Copying JAR file to application directory..."
 sudo cp ${JAR_NAME} ${APP_DIR}/
+echo "Contents of ${APP_DIR} after copy:"
+ls -l ${APP_DIR}
 
 # Get just the filename of the JAR
 JAR_FILENAME=$(basename ${JAR_NAME})
@@ -59,5 +65,7 @@ EOF
 
 # Enable the service
 sudo systemctl enable myapp.service
+echo "Starting the application service..."
+sudo systemctl start myapp.service
 
 echo "Packer setup completed successfully."

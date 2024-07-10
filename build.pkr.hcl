@@ -55,9 +55,9 @@ build {
   ]
   
   provisioner "file" {
-    source      = var.COMPILED_JAR_PATH
-    destination = "/tmp/artifacts/"
-  }
+  source      = var.COMPILED_JAR_PATH
+  destination = "/tmp/artifacts/"
+}
   
   provisioner "shell" {
     script = "setup-deps-hashicups.sh"
