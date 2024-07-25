@@ -85,6 +85,15 @@ NEW_INSTANCE_ID=$(aws autoscaling describe-auto-scaling-groups \
 
 echo "New instance ID: $NEW_INSTANCE_ID"
 
+
+echo "Checking contents of /opt/myapp in the new instance:"
+aws ssm send-command \
+  --instance-ids $NEW_INSTANCE_ID \
+  --document-name "AWS-RunShellScript" \
+  --parameters '{"commands":["ls -l /opt/myapp"]}' \
+  --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
+
+  
 echo "Waiting for ALB to report the target as healthy..."
 TARGET_GROUP_ARN=$(aws autoscaling describe-auto-scaling-groups \
   --auto-scaling-group-names $FRONTEND_ASG_NAME \

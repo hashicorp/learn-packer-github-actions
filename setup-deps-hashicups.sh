@@ -29,6 +29,10 @@ sudo cp ${JAR_NAME} ${APP_DIR}/
 echo "Contents of ${APP_DIR} after copy:"
 ls -l ${APP_DIR}
 
+echo "JAR copied. Contents of ${APP_DIR}:"
+ls -l ${APP_DIR}
+
+
 # Ensure correct permissions
 sudo chown ec2-user:ec2-user ${APP_DIR}/${JAR_FILENAME}
 sudo chmod 644 ${APP_DIR}/${JAR_FILENAME}

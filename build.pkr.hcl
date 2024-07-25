@@ -72,6 +72,13 @@ provisioner "shell" {
   script = "setup-deps-hashicups.sh"
 }
   
+  provisioner "shell" {
+  inline = [
+    "echo 'Contents of /tmp/artifacts after file copy:'",
+    "ls -l /tmp/artifacts/"
+  ]
+}
+
   post-processor "manifest" {
     output     = "packer_manifest.json"
     strip_path = true
