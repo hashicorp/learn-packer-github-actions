@@ -3,8 +3,14 @@
 set -e
 echo "Starting Packer setup script..."
 
-echo "Contents of /tmp/artifacts/:"
-ls -l /tmp/artifacts/
+# Define variables
+APP_DIR="/opt/myapp"
+ARTIFACT_DIR="/tmp/artifacts"
+JAR_NAME=$(find ${ARTIFACT_DIR} -type f -name '*.jar' | head -1)
+JAR_FILENAME=$(basename ${JAR_NAME})
+
+echo "Contents of ${ARTIFACT_DIR}:"
+ls -l ${ARTIFACT_DIR}
 
 # Update and upgrade system packages
 echo "Updating system packages..."
@@ -14,14 +20,6 @@ sudo yum update -y
 echo "Installing Java 17..."
 sudo dnf install -y java-17-amazon-corretto
 
-
-APP_DIR="/home/ec2-user/app"
-ARTIFACT_DIR="/tmp/artifacts"
-JAR_NAME=$(find ${ARTIFACT_DIR} -type f -name '*.jar' | head -1)
-
-echo "Contents of ${ARTIFACT_DIR}:"
-ls -l ${ARTIFACT_DIR}
-
 # Ensure app directory exists
 sudo mkdir -p ${APP_DIR}
 
@@ -30,23 +28,6 @@ echo "Copying JAR file to application directory..."
 sudo cp ${JAR_NAME} ${APP_DIR}/
 echo "Contents of ${APP_DIR} after copy:"
 ls -l ${APP_DIR}
-
-
-
-# Ensure app directory exists
-sudo mkdir -p ${APP_DIR}
-
-# Copy the JAR file from the artifact directory to the app directory
-echo "Copying JAR file to application directory..."
-sudo cp ${JAR_NAME} ${APP_DIR}/
-echo "Contents of ${APP_DIR} after copy:"
-ls -l ${APP_DIR}
-
-echo "Contents of ${APP_DIR} after copy:"
-ls -l ${APP_DIR}
-
-# Get just the filename of the JAR
-JAR_FILENAME=$(basename ${JAR_NAME})
 
 # Ensure correct permissions
 sudo chown ec2-user:ec2-user ${APP_DIR}/${JAR_FILENAME}
