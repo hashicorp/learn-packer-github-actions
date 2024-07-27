@@ -22,6 +22,7 @@ variable "SSH_PACKER_PUB" {
 variable "COMPILED_JAR_PATH" {
   type        = string
   description = "נתיב לקובץ ה-JAR המקומפל מ-GitHub Actions"
+  default     = "./backend-jar"
 }
 
 variable "source_ami" {
@@ -55,8 +56,15 @@ build {
   ]
 
   provisioner "file" {
-  source      = "${var.COMPILED_JAR_PATH}"
+  source      = "${var.COMPILED_JAR_PATH}/"
   destination = "/tmp/artifacts/"
+}
+
+provisioner "shell" {
+  inline = [
+    "echo 'Contents of /tmp/artifacts after file upload:'",
+    "ls -la /tmp/artifacts"
+  ]
 }
 
 provisioner "shell" {

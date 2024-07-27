@@ -16,6 +16,14 @@ JAR_FILENAME=$(basename ${JAR_NAME})
 
 echo "Contents of ${ARTIFACT_DIR}:"
 ls -l ${ARTIFACT_DIR}
+echo "Current directory: $(pwd)"
+echo "Contents of current directory:"
+ls -la
+echo "Contents of /tmp:"
+ls -la /tmp
+echo "Contents of ${ARTIFACT_DIR}:"
+ls -la ${ARTIFACT_DIR}
+
 
 # Update and upgrade system packages
 echo "Updating system packages..."
