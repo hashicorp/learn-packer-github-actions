@@ -73,3 +73,6 @@ echo "Starting the application service..."
 sudo systemctl start myapp.service
 
 echo "Packer setup completed successfully."
+
+echo "Final check - Contents of ${APP_DIR}:"
+ls -l ${APP_DIR}

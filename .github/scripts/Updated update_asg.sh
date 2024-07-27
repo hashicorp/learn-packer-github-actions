@@ -15,6 +15,19 @@ JAVA_OPTS="-Xmx512m -Dspring.profiles.active=production -Dspring.jpa.hibernate.d
 
 echo "Starting ASG update process with AMI ID: $AMI_ID"
 
+echo "Checking contents of $APP_DIR:"
+if [ -d "$APP_DIR" ]; then
+    ls -l $APP_DIR
+else
+    echo "$APP_DIR does not exist"
+fi
+
+echo "Checking for JAR files:"
+find $APP_DIR -name "*.jar"
+
+echo "Checking permissions:"
+ls -ld $APP_DIR
+
 # Check if Launch Template exists
 if ! aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_NAME" > /dev/null 2>&1; then
     echo "Error: Launch Template $LAUNCH_TEMPLATE_NAME does not exist."
