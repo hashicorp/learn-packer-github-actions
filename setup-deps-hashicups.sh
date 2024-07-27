@@ -3,6 +3,11 @@
 set -e
 echo "Starting Packer setup script..."
 
+if [ ! -f "${ARTIFACT_DIR}/*.jar" ]; then
+  echo "Error: No JAR file found in ${ARTIFACT_DIR}"
+  exit 1
+fi
+
 # Define variables
 APP_DIR="/opt/myapp"
 ARTIFACT_DIR="/tmp/artifacts"
