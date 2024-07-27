@@ -63,12 +63,6 @@ jobs:
           -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false \
           -DskipTests
       
-       - name: Check backend-jar content before Packer
-         run: |
-         echo "Contents of ./backend-jar before Packer:"
-        ls -la ./backend-jar
-
-
       - name: Upload compiled JAR
         uses: actions/upload-artifact@v2
         with:
@@ -78,6 +72,11 @@ jobs:
       - name: Check uploaded artifact
         run: |
           echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
+      
+      - name: Check backend-jar content before Packer
+        run: |
+          echo "Contents of ./backend-jar before Packer:"
+          ls -la ./backend-jar
 
   build-artifact:
     name: Build AMI
