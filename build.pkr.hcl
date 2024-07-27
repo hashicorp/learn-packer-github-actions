@@ -57,13 +57,19 @@ build {
 
   provisioner "file" {
   source      = "${var.COMPILED_JAR_PATH}/"
-  destination = "/tmp/artifacts/"
+  destination = "/tmp/artifacts"
 }
 
 provisioner "shell" {
   inline = [
-    "echo 'Contents of /tmp/artifacts after file upload:'",
-    "ls -la /tmp/artifacts"
+    "echo 'Current directory:'",
+    "pwd",
+    "echo 'Contents of current directory:'",
+    "ls -la",
+    "echo 'Contents of /tmp:'",
+    "ls -la /tmp",
+    "echo 'Contents of /tmp/artifacts:'",
+    "ls -la /tmp/artifacts || echo '/tmp/artifacts does not exist'"
   ]
 }
 
