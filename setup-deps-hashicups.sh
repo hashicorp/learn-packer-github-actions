@@ -20,22 +20,15 @@ sudo yum update -y
 echo "Installing Java 17..."
 sudo dnf install -y java-17-amazon-corretto
 
-# Ensure app directory exists
+# Ensure app directory exists and copy JAR
+echo "Creating ${APP_DIR} and copying JAR..."
 sudo mkdir -p ${APP_DIR}
-
-# Copy the JAR file from the artifact directory to the app directory
-echo "Copying JAR file to application directory..."
 sudo cp ${JAR_NAME} ${APP_DIR}/
+sudo chown -R ec2-user:ec2-user ${APP_DIR}
+sudo chmod 644 ${APP_DIR}/${JAR_FILENAME}
+
 echo "Contents of ${APP_DIR} after copy:"
 ls -l ${APP_DIR}
-
-echo "JAR copied. Contents of ${APP_DIR}:"
-ls -l ${APP_DIR}
-
-
-# Ensure correct permissions
-sudo chown ec2-user:ec2-user ${APP_DIR}/${JAR_FILENAME}
-sudo chmod 644 ${APP_DIR}/${JAR_FILENAME}
 
 # Create a startup script
 echo "Creating startup script..."
@@ -64,15 +57,37 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
+sudo systemctl enable myapp.service
+
 echo "Final contents of ${APP_DIR}:"
 ls -l ${APP_DIR}
 
-# Enable the service
-sudo systemctl enable myapp.service
-echo "Starting the application service..."
-sudo systemctl start myapp.service
+# Create a script that will run on instance launch (simulating User Data)
+echo "Creating instance launch script..."
+cat << EOF | sudo tee /opt/instance_launch.sh
+#!/bin/bash
+
+# Ensure the application directory exists
+APP_DIR="${APP_DIR}"
+sudo mkdir -p \${APP_DIR}
+sudo chown ec2-user:ec2-user \${APP_DIR}
+
+# Check if JAR file exists and start the service
+if [ -f "\${APP_DIR}"/*.jar ]; then
+  echo "JAR file found. Starting the service..."
+  sudo systemctl start myapp.service
+else
+  echo "Error: JAR file not found in \${APP_DIR}"
+fi
+
+echo "Instance launch setup completed."
+EOF
+
+sudo chmod +x /opt/instance_launch.sh
+
+# Add the launch script to run at instance boot
+echo "Adding launch script to run at boot..."
+sudo sed -i '/^exit 0/i /opt/instance_launch.sh' /etc/rc.local
+sudo chmod +x /etc/rc.local
 
 echo "Packer setup completed successfully."
-
-echo "Final check - Contents of ${APP_DIR}:"
-ls -l ${APP_DIR}

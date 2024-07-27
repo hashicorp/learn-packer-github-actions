@@ -26,7 +26,12 @@ echo "Checking for JAR files:"
 find $APP_DIR -name "*.jar"
 
 echo "Checking permissions:"
-ls -ld $APP_DIR
+ls -ld $APP_DIR  
+
+echo "Listing root directory:"
+ls -l /
+echo "Listing /opt directory:"
+ls -l /opt
 
 # Check if Launch Template exists
 if ! aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_NAME" > /dev/null 2>&1; then
