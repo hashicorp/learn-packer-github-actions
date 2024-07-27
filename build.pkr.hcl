@@ -73,14 +73,8 @@ provisioner "shell" {
 
   provisioner "shell" {
   inline = [
-    "echo 'Contents of /opt/myapp after setup:'",
-      "ls -l /opt/myapp/",
-      "echo 'Checking if myapp service is enabled:'",
-      "systemctl is-enabled myapp.service",
-      "echo 'Checking if launch script exists:'",
-      "ls -l /opt/instance_launch.sh",
-      "echo 'Checking if launch script is added to rc.local:'",
-      "grep '/opt/instance_launch.sh' /etc/rc.local"
+    "echo 'Contents of /tmp/artifacts after file copy:'",
+    "ls -l /tmp/artifacts/"
   ]
 }
 
