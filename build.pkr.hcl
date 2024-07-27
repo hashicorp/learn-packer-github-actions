@@ -42,34 +42,38 @@ source "amazon-ebs" "ubuntu-lts" {
 build {
   hcp_packer_registry {
     bucket_name = "learn-packer-github-actions"
-    description = "זוהי תמונה עבור אפליקציית Java."
+    description = <<EOT
+זוהי תמונה עבור אפליקציית Java.
+    EOT
     bucket_labels = {
       "hashicorp-learn" = "learn-packer-github-actions",
     }
   }
-  
-  sources = ["source.amazon-ebs.amazon-linux"]
-  
+
+  sources = [
+    "source.amazon-ebs.ubuntu-lts",
+  ]
+
   provisioner "file" {
-    source      = var.COMPILED_JAR_PATH
-    destination = "/tmp/artifacts/"
-  }
+  source      = "${var.COMPILED_JAR_PATH}"
+  destination = "/tmp/artifacts/"
+}
+
+provisioner "shell" {
+  inline = [
+    "ls -l /tmp/artifacts/",
+    "echo 'Contents of /tmp/artifacts:'",
+    "find /tmp/artifacts -type f -name '*.jar'"
+  ]
+}
+
+provisioner "shell" {
+  script = "setup-deps-hashicups.sh"
+}
 
   provisioner "shell" {
-    inline = [
-      "echo 'Contents of /tmp/artifacts before setup:'",
-      "ls -l /tmp/artifacts/",
-      "find /tmp/artifacts -type f -name '*.jar'"
-    ]
-  }
-
-  provisioner "shell" {
-    script = "setup-deps-hashicups.sh"
-  }
-  
-  provisioner "shell" {
-    inline = [
-      "echo 'Contents of /opt/myapp after setup:'",
+  inline = [
+    "echo 'Contents of /opt/myapp after setup:'",
       "ls -l /opt/myapp/",
       "echo 'Checking if myapp service is enabled:'",
       "systemctl is-enabled myapp.service",
@@ -77,8 +81,8 @@ build {
       "ls -l /opt/instance_launch.sh",
       "echo 'Checking if launch script is added to rc.local:'",
       "grep '/opt/instance_launch.sh' /etc/rc.local"
-    ]
-  }
+  ]
+}
 
   post-processor "manifest" {
     output     = "packer_manifest.json"
