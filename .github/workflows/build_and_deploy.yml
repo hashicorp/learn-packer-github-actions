@@ -72,11 +72,6 @@ jobs:
       - name: Check uploaded artifact
         run: |
           echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
-      
-      - name: Check backend-jar content before Packer
-        run: |
-          echo "Contents of ./backend-jar before Packer:"
-          ls -la ./backend-jar
 
   build-artifact:
     name: Build AMI
@@ -96,6 +91,9 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
+      
+      - name: Ensure backend-jar directory exists
+        run: mkdir -p ./backend-jar
       
       - name: Download compiled JAR
         uses: actions/download-artifact@v2
@@ -134,13 +132,13 @@ jobs:
           packer build \
             -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
             -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
-            -var "COMPILED_JAR_PATH=./backend-jar" \
+            -var "COMPILED_JAR_PATH=./backend-jar/*.jar" \
             -var "source_ami=${{ env.LATEST_AMI }}" \
             .
       
-      - name: Check backend-jar content
+      - name: Check backend-jar content after Packer
         run: |
-          echo "Contents of ./backend-jar:"
+          echo "Contents of ./backend-jar after Packer:"
           ls -l ./backend-jar
       
       - name: Get HCP Packer version fingerprint from Packer Manifest
@@ -159,8 +157,6 @@ jobs:
           ami_id=$(echo "$build" | jq -r '.artifact_id' | cut -d':' -f2)
           echo "ami_id=$ami_id" >> $GITHUB_OUTPUT
           echo "AMI ID from Packer build: $ami_id"
-      
-      
 
   update-hcp-packer-channel:
     name: Update HCP Packer channel
