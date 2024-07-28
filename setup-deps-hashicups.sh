@@ -3,7 +3,9 @@
 set -e
 echo "Starting Packer setup script..."
 
-if [ ! -f "${ARTIFACT_DIR}/*.jar" ]; then
+ARTIFACT_DIR="/tmp"
+
+if [ -z "$(find ${ARTIFACT_DIR} -name '*.jar' -print -quit)" ]; then
   echo "Error: No JAR file found in ${ARTIFACT_DIR}"
   exit 1
 fi
@@ -23,7 +25,10 @@ echo "Contents of /tmp:"
 ls -la /tmp
 echo "Contents of ${ARTIFACT_DIR}:"
 ls -la ${ARTIFACT_DIR}
-
+echo "ARTIFACT_DIR is set to: ${ARTIFACT_DIR}"
+echo "JAR_NAME is: ${JAR_NAME}"
+echo "Contents of ${ARTIFACT_DIR}:"
+ls -l ${ARTIFACT_DIR}
 
 # Update and upgrade system packages
 echo "Updating system packages..."
