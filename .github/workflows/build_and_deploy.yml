@@ -63,46 +63,46 @@ jobs:
           -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false \
           -DskipTests
       
-      - name: Upload compiled JAR
+       - name: Upload compiled JAR
          uses: actions/upload-artifact@v2
          with:
           name: compiled-backend
-        path: target/*.jar
+         path: target/*.jar
 
 
          
 
   build-artifact:
     name: Build AMI
-    needs: compile-backend
-    runs-on: ubuntu-latest
-    outputs:
+      needs: compile-backend
+     runs-on: ubuntu-latest
+     outputs:
       version_fingerprint: ${{ steps.hcp.outputs.version_fingerprint }}
       ami_id: ${{ steps.ami.outputs.ami_id }}
-    if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
-    steps:
-      - name: Checkout Repository
+     if: github.event.inputs.run_update_asg_only != 'true' && github.event.inputs.use_default_ami != 'true'
+     steps:
+     - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
+    - name: Configure AWS Credentials
+         uses: aws-actions/configure-aws-credentials@v4
+         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
       
-      -name: Ensure backend-jar directory exists
+    -name: Ensure backend-jar directory exists
         run: mkdir -p ./backend-jar
 
-     - name: Download compiled JAR
+   - name: Download compiled JAR
         uses: actions/download-artifact@v2
        with:
        name: compiled-backend
        path: ./backend-jar
 
-     - name: Check backend-jar content
+    - name: Check backend-jar content
        run: |
-      echo "Current directory:"
+       echo "Current directory:"
        pwd
        echo "Contents of current directory:"
        ls -la
@@ -111,10 +111,10 @@ jobs:
        echo "JAR file details:"
        find ./backend-jar -name "*.jar" -type f -exec ls -l {} \;
       
-      - name: Packer Init
+    - name: Packer Init
         run: packer init .
 
-      - name: Get latest AMI from Launch Template
+     - name: Get latest AMI from Launch Template
         run: |
           LATEST_LT_VERSION=$(aws ec2 describe-launch-template-versions \
             --launch-template-name "${{ env.LAUNCH_TEMPLATE_NAME }}" \
