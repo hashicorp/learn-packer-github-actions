@@ -64,14 +64,13 @@ jobs:
           -DskipTests
       
       - name: Upload compiled JAR
-        uses: actions/upload-artifact@v2
-        with:
+         uses: actions/upload-artifact@v2
+         with:
           name: compiled-backend
-          path: target/*.jar
-      
-      - name: Check uploaded artifact
-        run: |
-          echo "Artifact uploaded. Check the 'Artifacts' section in the GitHub Actions run."
+        path: target/*.jar
+
+
+         
 
   build-artifact:
     name: Build AMI
@@ -92,23 +91,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: il-central-1
       
-      - name: Ensure backend-jar directory exists
+      -name: Ensure backend-jar directory exists
         run: mkdir -p ./backend-jar
-      
-      - name: Download compiled JAR
-        uses: actions/download-artifact@v2
-        with:
-          name: compiled-backend
-          path: ./backend-jar
 
-      - name: Check backend-jar content
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of ./backend-jar:"
-          ls -la ./backend-jar
+     - name: Download compiled JAR
+        uses: actions/download-artifact@v2
+       with:
+       name: compiled-backend
+       path: ./backend-jar
+
+     - name: Check backend-jar content
+       run: |
+      echo "Current directory:"
+       pwd
+       echo "Contents of current directory:"
+       ls -la
+       echo "Contents of ./backend-jar:"
+       ls -la ./backend-jar
+       echo "JAR file details:"
+       find ./backend-jar -name "*.jar" -type f -exec ls -l {} \;
       
       - name: Packer Init
         run: packer init .
@@ -129,12 +130,18 @@ jobs:
       
       - name: Packer Build
         run: |
-          packer build \
-            -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
-            -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
-            -var "COMPILED_JAR_PATH=./backend-jar/*.jar" \
-            -var "source_ami=${{ env.LATEST_AMI }}" \
-            .
+       JAR_FILE=$(find ./backend-jar -name "*.jar" -type f)
+       if [ -z "$JAR_FILE" ]; then
+        echo "Error: No JAR file found"
+        exit 1
+       fi
+       echo "Using JAR file: $JAR_FILE"
+       packer build \
+        -var "SSH_PACKER=${{ secrets.SSH_PACKER }}" \
+        -var "SSH_PACKER_PUB=${{ secrets.SSH_PACKER_PUB }}" \
+        -var "COMPILED_JAR_PATH=$JAR_FILE" \
+        -var "source_ami=${{ env.LATEST_AMI }}" \
+      .
       
       - name: Check backend-jar content after Packer
         run: |

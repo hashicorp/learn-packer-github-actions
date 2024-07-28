@@ -21,8 +21,7 @@ variable "SSH_PACKER_PUB" {
 
 variable "COMPILED_JAR_PATH" {
   type        = string
-  description = "נתיב לקובץ ה-JAR המקומפל מ-GitHub Actions"
-  default     = "./backend-jar/HeshbonaitPlus-0.0.1-SNAPSHOT.jar"
+  description = "Full path to the compiled JAR file"
 }
 
 variable "source_ami" {
@@ -56,28 +55,18 @@ build {
   ]
 
   provisioner "file" {
-  source      = "${var.COMPILED_JAR_PATH}/"
-  destination = "/tmp/artifacts"
+  source      = var.COMPILED_JAR_PATH
+  destination = "/tmp/app.jar"
 }
 
 provisioner "shell" {
   inline = [
-    "echo 'Current directory:'",
-    "pwd",
-    "echo 'Contents of current directory:'",
-    "ls -la",
     "echo 'Contents of /tmp:'",
     "ls -la /tmp",
-    "echo 'Contents of /tmp/artifacts:'",
-    "ls -la /tmp/artifacts || echo '/tmp/artifacts does not exist'"
-  ]
-}
-
-provisioner "shell" {
-  inline = [
-    "ls -l /tmp/artifacts/",
-    "echo 'Contents of /tmp/artifacts:'",
-    "find /tmp/artifacts -type f -name '*.jar'"
+    "echo 'JAR file details:'",
+    "ls -l /tmp/app.jar",
+    "echo 'JAR file size:'",
+    "du -h /tmp/app.jar"
   ]
 }
 
