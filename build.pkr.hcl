@@ -22,7 +22,7 @@ variable "SSH_PACKER_PUB" {
 variable "COMPILED_JAR_PATH" {
   type        = string
   description = "נתיב לקובץ ה-JAR המקומפל מ-GitHub Actions"
-  default     = "./backend-jar"
+  default     = "./backend-jar/HeshbonaitPlus-0.0.1-SNAPSHOT.jar"
 }
 
 variable "source_ami" {
