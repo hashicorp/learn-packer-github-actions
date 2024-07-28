@@ -4,18 +4,20 @@ set -e
 echo "Starting Packer setup script..."
 
 ARTIFACT_DIR="/tmp"
+JAR_NAME="/tmp/app.jar"
 
-if [ -z "$(find ${ARTIFACT_DIR} -name '*.jar' -print -quit)" ]; then
-  echo "Error: No JAR file found in ${ARTIFACT_DIR}"
+if [ ! -f "$JAR_NAME" ]; then
+  echo "Error: JAR file not found at $JAR_NAME"
   exit 1
 fi
 
 # Define variables
 APP_DIR="/opt/myapp"
-ARTIFACT_DIR="/tmp/artifacts"
-JAR_NAME=$(find ${ARTIFACT_DIR} -type f -name '*.jar' | head -1)
 JAR_FILENAME=$(basename ${JAR_NAME})
 
+echo "ARTIFACT_DIR is set to: ${ARTIFACT_DIR}"
+echo "JAR_NAME is: ${JAR_NAME}"
+echo "JAR_FILENAME is: ${JAR_FILENAME}"
 echo "Contents of ${ARTIFACT_DIR}:"
 ls -l ${ARTIFACT_DIR}
 echo "Current directory: $(pwd)"
@@ -23,12 +25,7 @@ echo "Contents of current directory:"
 ls -la
 echo "Contents of /tmp:"
 ls -la /tmp
-echo "Contents of ${ARTIFACT_DIR}:"
-ls -la ${ARTIFACT_DIR}
-echo "ARTIFACT_DIR is set to: ${ARTIFACT_DIR}"
-echo "JAR_NAME is: ${JAR_NAME}"
-echo "Contents of ${ARTIFACT_DIR}:"
-ls -l ${ARTIFACT_DIR}
+
 
 # Update and upgrade system packages
 echo "Updating system packages..."
@@ -44,9 +41,6 @@ sudo mkdir -p ${APP_DIR}
 sudo cp ${JAR_NAME} ${APP_DIR}/
 sudo chown -R ec2-user:ec2-user ${APP_DIR}
 sudo chmod 644 ${APP_DIR}/${JAR_FILENAME}
-
-echo "Contents of ${APP_DIR} after copy:"
-ls -l ${APP_DIR}
 
 # Create a startup script
 echo "Creating startup script..."
