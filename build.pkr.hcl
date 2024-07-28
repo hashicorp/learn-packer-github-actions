@@ -54,39 +54,25 @@ build {
     "source.amazon-ebs.ubuntu-lts",
   ]
 
-provisioner "shell" {
-  inline = [
-    "if [ ! -f '${var.COMPILED_JAR_PATH}' ]; then echo 'JAR file not found at ${var.COMPILED_JAR_PATH}'; exit 1; fi",
-    "echo 'JAR file found at ${var.COMPILED_JAR_PATH}'"
-  ]
-
-}
   provisioner "file" {
-  source      = var.COMPILED_JAR_PATH
-  destination = "/tmp/app.jar"
-}
-
-provisioner "shell" {
-  inline = [
-    "echo 'Contents of /tmp:'",
-    "ls -la /tmp",
-    "echo 'JAR file details:'",
-    "ls -l /tmp/app.jar",
-    "echo 'JAR file size:'",
-    "du -h /tmp/app.jar"
-  ]
-}
-
-provisioner "shell" {
-  script = "setup-deps-hashicups.sh"
-}
+    source      = var.COMPILED_JAR_PATH
+    destination = "/tmp/app.jar"
+  }
 
   provisioner "shell" {
-  inline = [
-    "echo 'Contents of /tmp/artifacts after file copy:'",
-    "ls -l /tmp/artifacts/"
-  ]
-}
+    inline = [
+      "echo 'Contents of /tmp:'",
+      "ls -la /tmp",
+      "echo 'JAR file details:'",
+      "ls -l /tmp/app.jar",
+      "echo 'JAR file size:'",
+      "du -h /tmp/app.jar"
+    ]
+  }
+
+  provisioner "shell" {
+    script = "setup-deps-hashicups.sh"
+  }
 
   post-processor "manifest" {
     output     = "packer_manifest.json"
