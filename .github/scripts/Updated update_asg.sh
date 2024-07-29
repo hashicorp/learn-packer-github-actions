@@ -8,8 +8,8 @@ FRONTEND_ASG_NAME=$2
 LAUNCH_TEMPLATE_NAME=$3
 
 # Define variables for the Java application
-APP_DIR="/opt/myapp"  # Updated to the correct directory
-JAR_FILE=$(ls $APP_DIR/*.jar | head -n 1)  # Assumes the JAR file is in the app directory
+APP_DIR="/tmp"    # Updated to the correct directory
+JAR_FILE=$(find $APP_DIR -name "*.jar" | head -n 1) # Assumes the JAR file is in the app directory
 JAVA_VERSION="17"
 JAVA_OPTS="-Xmx512m -Dspring.profiles.active=production -Dspring.jpa.hibernate.ddl-auto=none -Dspring.jpa.properties.hibernate.temp.use_jdbc_metadata_defaults=false"
 
@@ -23,15 +23,10 @@ else
 fi
 
 echo "Checking for JAR files:"
-find $APP_DIR -name "*.jar"
+find $APP_DIR -name "*.jar" || echo "No JAR files found in $APP_DIR"
 
 echo "Checking permissions:"
 ls -ld $APP_DIR  
-
-echo "Listing root directory:"
-ls -l /
-echo "Listing /opt directory:"
-ls -l /opt
 
 # Check if Launch Template exists
 if ! aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_NAME" > /dev/null 2>&1; then
@@ -119,26 +114,21 @@ echo "Checking IAM instance profile..."
 INSTANCE_PROFILE=$(aws ec2 describe-instances --instance-ids $NEW_INSTANCE_ID --query 'Reservations[0].Instances[0].IamInstanceProfile.Arn' --output text)
 echo "Instance profile: $INSTANCE_PROFILE"
 
-echo "Checking SSM agent status..."
-SSM_STATUS=$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$NEW_INSTANCE_ID" --query 'InstanceInformationList[0].PingStatus' --output text)
-echo "SSM status: $SSM_STATUS"
 
-echo "Checking VPC endpoints for SSM..."
-VPC_ID=$(aws ec2 describe-instances --instance-ids $NEW_INSTANCE_ID --query 'Reservations[0].Instances[0].VpcId' --output text)
-aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$VPC_ID" "Name=service-name,Values=com.amazonaws.il-central-1.ssm"
 
-echo "Checking contents of /opt/myapp in the new instance:"
+
+echo "Checking contents of $APP_DIR in the new instance:"
 aws ssm send-command \
   --instance-ids $NEW_INSTANCE_ID \
   --document-name "AWS-RunShellScript" \
-  --parameters '{"commands":["ls -l /opt/myapp"]}' \
+  --parameters '{"commands":["ls -l '$APP_DIR'"]}' \
   --output text --query "CommandInvocations[0].CommandPlugins[0].Output"
 
 echo "Checking if JAR file exists:"
-if [ ! -f "$APP_DIR"/*.jar ]; then
+if [ -z "$JAR_FILE" ]; then
   echo "Error: JAR file not found in $APP_DIR"
 else
-  echo "JAR file found in $APP_DIR"
+  echo "JAR file found: $JAR_FILE"
 fi
 
 echo "Waiting for ALB to report the target as healthy..."
